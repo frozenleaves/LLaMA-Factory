@@ -406,6 +406,7 @@ class ModelArguments(
         metadata={"help": "Whether use block diag attention or not, derived from `neat_packing`. Do not specify it."},
     )
 
+
     def __post_init__(self):
         BaseModelArguments.__post_init__(self)
         ProcessorArguments.__post_init__(self)
