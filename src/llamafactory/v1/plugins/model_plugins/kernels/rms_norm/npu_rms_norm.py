@@ -17,7 +17,7 @@ import types
 from .....extras.types import HFModel
 from ....trainer_plugins.distributed.accelerate import is_torch_npu_available
 from ..constants import DeviceType, KernelType
-from ..registry import MetaRMSNormKernel
+from ..registry import MetaRMSNormKernel, logging_kernel_apply
 
 
 def _npu_rms_forward(self, hidden_states):
@@ -43,6 +43,7 @@ class NpuRMSNormKernel(MetaRMSNormKernel):
     kernel = _npu_rms_forward
 
     @classmethod
+    @logging_kernel_apply(target_obj_name="model")
     def apply(cls, model, **kwargs) -> HFModel:
         """Iterate the model and apply NPU-optimized forward to matched RMSNorm modules.
 

@@ -12,12 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import inspect
 from abc import ABC, ABCMeta, abstractmethod
+from functools import wraps
 from typing import Any, Callable, Optional
 
+from .....extras.logging import get_logger
 from ....extras.types import HFModel
 from ...trainer_plugins.distributed.accelerate import get_available_accelerator
 from .constants import DeviceType, KernelType
+
+
+logger = get_logger(__name__)
 
 
 class KernelRegistry:
@@ -153,6 +159,38 @@ class MetaMoEKernel(MetaKernel):
     @classmethod
     def apply(cls, model: HFModel, **kwargs) -> HFModel:
         raise NotImplementedError
+
+
+def logging_kernel_apply(target_obj_name="model"):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            result = func(*args, **kwargs)
+
+            sig = inspect.signature(func)
+            bound_args = sig.bind(*args, **kwargs)
+            bound_args.apply_defaults()
+
+            target_obj = bound_args.arguments.get(target_obj_name, None)
+
+            overridden = {}
+            if target_obj is not None:
+                cls = target_obj.__class__
+                for name, value in target_obj.__dict__.items():
+                    if callable(value):
+                        if not hasattr(cls, name):
+                            overridden[name] = ("added", value)
+                        else:
+                            class_attr = getattr(cls, name)
+                            if class_attr is not value:
+                                overridden[name] = ("overridden", value)
+
+            logger.info_rank0()
+            return result
+
+        return wrapper
+
+    return decorator
 
 
 def _ensure_kernels_loaded() -> None:
