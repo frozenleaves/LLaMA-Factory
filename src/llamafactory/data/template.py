@@ -402,6 +402,51 @@ class Llama2Template(Template):
 
 
 @dataclass
+class KimiK2Template(Template):
+    r"""A template that handles kimi tool declaration."""
+
+    @override
+    def _encode(
+        self,
+        tokenizer: "PreTrainedTokenizer",
+        messages: list[dict[str, str]],
+        system: Optional[str],
+        tools: Optional[str],
+    ) -> list[list[int]]:
+        r"""Encode formatted inputs to pairs of token ids."""
+        system = system or self.default_system
+        encoded_messages = []
+        for i, message in enumerate(messages):
+            elements = []
+
+            if i == 0:
+                elements += self.format_prefix.apply()
+                if tools:
+                    tool_text = self.format_tools.apply(content=tools)[0]
+                    elements += self._convert_elements_to_ids(tokenizer, [tool_text])
+
+                if system:
+                    elements += self.format_system.apply(content=system)
+
+            if message["role"] == Role.USER:
+                elements += self.format_user.apply(content=message["content"], idx=str(i // 2))
+            elif message["role"] == Role.ASSISTANT:
+                elements += self.format_assistant.apply(content=message["content"])
+            elif message["role"] == Role.OBSERVATION:
+                elements += self.format_observation.apply(content=message["content"])
+            elif message["role"] == Role.FUNCTION:
+                elements += self.format_function.apply(
+                    content=message["content"], thought_words=self.thought_words, tool_call_words=self.tool_call_words
+                )
+            else:
+                raise NotImplementedError("Unexpected role: {}".format(message["role"]))
+
+            encoded_messages.append(self._convert_elements_to_ids(tokenizer, elements))
+
+        return encoded_messages
+
+
+@dataclass
 class ReasoningTemplate(Template):
     r"""A template that add thought to assistant message."""
 
@@ -1166,7 +1211,7 @@ register_template(
 
 
 register_template(
-    name="gpt_oss",
+    name="gpt",
     format_user=StringFormatter(slots=["<|start|>user<|message|>{{content}}<|end|><|start|>assistant"]),
     format_assistant=StringFormatter(slots=["{{content}}<|end|>"]),
     format_system=StringFormatter(slots=["<|start|>system<|message|>{{content}}<|end|>"]),
@@ -1312,6 +1357,22 @@ register_template(
     replace_eos=True,
     mm_plugin=get_mm_plugin(name="qwen2_vl", image_token="<|image_pad|>", video_token="<|video_pad|>"),
     template_class=ReasoningTemplate,
+)
+
+
+register_template(
+    name="kimi_k2",
+    format_user=StringFormatter(slots=["<|im_user|>user<|im_middle|>{{content}}<|im_end|>"]),
+    format_assistant=StringFormatter(slots=["<|im_assistant|>assistant<|im_middle|>{{content}}<|im_end|>"]),
+    format_system=StringFormatter(slots=["<|im_system|>system<|im_middle|>{{content}}<|im_end|>"]),
+    format_function=StringFormatter(slots=["<|im_assistant|>assistant<|im_middle|>{{content}}<|im_end|>"]),
+    format_observation=StringFormatter(
+        slots=["<|im_system|>tool<|im_middle|>## Return of call_default\n{{content}}<|im_end|>"]
+    ),
+    format_tools=StringFormatter(slots=["<|im_system|>tool_declare<|im_middle|>{{content}}<|im_end|>"]),
+    default_system="You are Kimi, an AI assistant created by Moonshot AI.",
+    stop_words=["<|im_end|>"],
+    template_class=KimiK2Template,
 )
 
 
@@ -1609,26 +1670,6 @@ register_template(
     replace_eos=True,
     template_class=ReasoningTemplate,
 )
-
-
-# copied from qwen template
-register_template(
-    name="mimo_v2",
-    format_user=StringFormatter(slots=["<|im_start|>user\n{{content}}<|im_end|>\n<|im_start|>assistant\n"]),
-    format_assistant=StringFormatter(slots=["{{content}}<|im_end|>\n"]),
-    format_system=StringFormatter(slots=["<|im_start|>system\n{{content}}<|im_end|>\n"]),
-    format_function=FunctionFormatter(slots=["{{content}}<|im_end|>\n"], tool_format="qwen"),
-    format_observation=StringFormatter(
-        slots=["<|im_start|>user\n<tool_response>\n{{content}}\n</tool_response><|im_end|>\n<|im_start|>assistant\n"]
-    ),
-    format_tools=ToolFormatter(tool_format="qwen"),
-    default_system="You are MiMo, a helpful AI assistant engineered by Xiaomi.",
-    stop_words=["<|im_end|>"],
-    replace_eos=True,
-    thought_words=("<think>", "</think>"),
-    template_class=ReasoningTemplate,
-)
-
 
 # copied from qwen2vl
 register_template(

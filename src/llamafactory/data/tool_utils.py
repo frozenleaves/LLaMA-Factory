@@ -428,9 +428,52 @@ class LingToolUtils(QwenToolUtils):
         return LING_TOOL_PROMPT.format(tool_text=tool_text) + "\n" + "detailed thinking off"
 
 
+class KimiK2ToolUtils(ToolUtils):
+    r"""Kimi tool using template."""
+
+    @override
+    @staticmethod
+    def tool_formatter(tools: list[dict[str, Any]]) -> str:
+        return json.dumps(tools, ensure_ascii=False)
+
+    @override
+    @staticmethod
+    def function_formatter(functions: list["FunctionCall"]) -> str:
+        text = "<|tool_calls_section_begin|>"
+        for i, (name, arguments) in enumerate(functions):
+            text += f"<|tool_call_begin|>call_default_{i}<|tool_call_argument_begin|>{arguments}<|tool_call_end|>"
+        text += "<|tool_calls_section_end|>"
+        return text
+
+    @override
+    @staticmethod
+    def tool_extractor(content: str) -> Union[str, list["FunctionCall"]]:
+        regex = re.compile(
+            r"<|tool_call_begin|>(.*?)<|tool_call_argument_begin|>(.*?)<|tool_call_end|>", re.DOTALL
+        )
+        tool_match = re.findall(regex, content)
+        if not tool_match:
+            return content
+
+        results = []
+        for _, args in tool_match:
+            try:
+                # Note: The template provided does not explicitly output the function name.
+                # We attempt to parse arguments. If 'name' is inside arguments (non-standard), we use it.
+                # Otherwise, we might have incomplete FunctionCall objects which is risky.
+                arguments_json = json.loads(args.strip())
+                name = arguments_json.get("name", "unknown_tool")
+                results.append(FunctionCall(name, json.dumps(arguments_json, ensure_ascii=False)))
+            except json.JSONDecodeError:
+                continue
+
+        return results
+
+
 TOOLS = {
     "default": DefaultToolUtils(),
     "glm4": GLM4ToolUtils(),
+    "kimi_k2": KimiK2ToolUtils(),
     "llama3": Llama3ToolUtils(),
     "mistral": MistralToolUtils(),
     "qwen": QwenToolUtils(),
