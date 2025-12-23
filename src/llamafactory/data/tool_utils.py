@@ -448,9 +448,7 @@ class KimiK2ToolUtils(ToolUtils):
     @override
     @staticmethod
     def tool_extractor(content: str) -> Union[str, list["FunctionCall"]]:
-        regex = re.compile(
-            r"<|tool_call_begin|>(.*?)<|tool_call_argument_begin|>(.*?)<|tool_call_end|>", re.DOTALL
-        )
+        regex = re.compile(r"<|tool_call_begin|>(.*?)<|tool_call_argument_begin|>(.*?)<|tool_call_end|>", re.DOTALL)
         tool_match = re.findall(regex, content)
         if not tool_match:
             return content
