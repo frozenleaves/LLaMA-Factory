@@ -66,3 +66,10 @@ class Test_Use_V1_Kernels(unittest.TestCase):
 
         assert model.model.layers[0].input_layernorm is not original_rmsnorm_forward
         assert model.model.layers[0].mlp.forward is not original_swiglu_forward
+
+
+if __name__ == "__main__":
+    from llamafactory.v1.plugins.model_plugins.kernels_v2.bootstrap import load_all_kernels
+
+    res = load_all_kernels()
+    print(res)
