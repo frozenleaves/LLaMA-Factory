@@ -15,9 +15,6 @@ jobs:
     
     strategy:
       fail-fast: false
-      matrix:
-        # 只保留 transformers 版本矩阵，去掉了 os 和多版本 python
-        transformers: [null, "4.57.3"]
 
     env:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -30,7 +27,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          # 开启缓存，加速后续运行的依赖安装
+          architecture: "x64"
+          # 尝试使用兼容的Ubuntu版本
+          os-version: "22.04"
           cache: "pip"
           cache-dependency-path: "**/requirements*.txt"
 
@@ -43,11 +42,6 @@ jobs:
           # 注意：如果是自托管机器且需要特定 CUDA 版本的 torch，
           # 建议在这里指定 index-url，例如 --extra-index-url https://download.pytorch.org/whl/cu121
           python -m pip install ".[torch,dev]"
-
-      - name: Install transformers
-        if: ${{ matrix.transformers }}
-        run: |
-          python -m pip install "transformers==${{ matrix.transformers }}"
 
       - name: Cache HuggingFace models
         id: hf-hub-cache
