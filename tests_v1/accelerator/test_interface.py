@@ -14,8 +14,15 @@
 
 
 import os
+import pytest
 
 from llamafactory.v1.accelerator.interface import DistributedInterface
+
+import torch
+
+@pytest.mark.runs_on(["cpu"])
+def test_cuda():
+    assert torch.torch.cuda.is_available() is True
 
 
 def test_distributed_interface():
