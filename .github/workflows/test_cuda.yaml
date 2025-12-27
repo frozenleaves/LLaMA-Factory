@@ -23,11 +23,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-          architecture: "x64"
+      - name: Show python
+        run: |
+          python3 --version
+          which python3
+
+      - name: Set up Python (use system python)
+        run: |
+          echo "PYTHON_PATH=$(which python3)" >>$GITHUB_ENV
+          echo "PYTHON_VERSION=$(python3 --version)" >>$GITHUB_ENV
           cache: "pip"
           cache-dependency-path: "**/requirements*.txt"
 
