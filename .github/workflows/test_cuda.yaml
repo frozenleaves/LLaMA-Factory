@@ -11,7 +11,7 @@ on:
 
 jobs:
   tests:
-    runs-on: self-hosted  # 确保你已经解决了 Exec format error 并启动了 Runner
+    runs-on: cuda  # 确保你已经解决了 Exec format error 并启动了 Runner
 
     steps:
       - name: Checkout
