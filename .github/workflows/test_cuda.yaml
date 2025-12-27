@@ -11,27 +11,18 @@ on:
 
 jobs:
   tests:
-    runs-on: self-hosted  # 运行在你的机器上
-    
-    strategy:
-      fail-fast: false
-
-    env:
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    runs-on: self-hosted  # 确保你已经解决了 Exec format error 并启动了 Runner
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show python
-        run: |
-          python3 --version
-          which python3
-
-      - name: Set up Python (use system python)
-        run: |
-          echo "PYTHON_PATH=$(which python3)" >>$GITHUB_ENV
-          echo "PYTHON_VERSION=$(python3 --version)" >>$GITHUB_ENV
+      # 修复点 1：正确调用 setup-python Action
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          # 修复点 2：cache 必须写在 setup-python 的 with 属性下
           cache: "pip"
           cache-dependency-path: "**/requirements*.txt"
 
@@ -40,17 +31,19 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # setup-python 会自动把对应的 python 路径加入 PATH
           python -m pip install --upgrade pip
-          # 注意：如果是自托管机器且需要特定 CUDA 版本的 torch，
-          # 建议在这里指定 index-url，例如 --extra-index-url https://download.pytorch.org/whl/cu121
+          # LLaMA Factory 建议安装方式
           python -m pip install ".[torch,dev]"
 
+      # 修复点 3：补齐 matrix.transformers 的引用（或者如果你不需要矩阵，直接去掉这个变量）
       - name: Cache HuggingFace models
         id: hf-hub-cache
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/huggingface
-          key: hf-cache-${{ runner.os }}-${{ matrix.transformers }}-${{ hashFiles('tests/version.txt') }}
+          # 删除了 matrix.transformers，因为你现在的脚本里没有定义 strategy matrix
+          key: hf-cache-${{ runner.os }}-${{ hashFiles('tests/version.txt') }}
 
       - name: Check quality & build
         run: |
