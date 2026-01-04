@@ -51,8 +51,12 @@ logger = logging.get_logger(__name__)
 
 
 def patch_qwen3_omni_moe_thinker_text_sparse_moe_block():
-    if is_transformers_version_greater_than("4.57.0"):
+    if is_transformers_version_greater_than("4.57.0") and not is_transformers_version_greater_than("4.58.0"):
         from .model_utils.moe import Qwen3OmniMoeThinkerTextSparseMoeBlock
+
+        logger.warning_rank0(
+            "You are using transformers with 4.x version, the Qwen3OmniMoeThinkerTextSparseMoeBlock will have some issues about deepspeed zero2 and fsdp2 training, so that we patched this model to avoid it. Transformers v5.0.0rc0 has fixed the issue, you can also try to update the transformers to using qwen3_omni. See more information on https://github.com/hiyouga/LLaMA-Factory/issues/9628."
+        )
 
         modeling_qwen3_omni_moe.Qwen3OmniMoeThinkerTextSparseMoeBlock = Qwen3OmniMoeThinkerTextSparseMoeBlock
 
@@ -134,13 +138,14 @@ def patch_config(
     if getattr(config, "model_type", None) == "kimi_vl" and is_trainable:
         setattr(config.text_config, "topk_method", "greedy")
 
-    if "InternVLChatModel" in getattr(config, "architectures", []):
+    architectures = getattr(config, "architectures", None)
+    if isinstance(architectures, list) and "InternVLChatModel" in architectures:
         raise ValueError(
             "Please download the internvl models in a Hugging Face–compatible format "
             "(for example, https://huggingface.co/OpenGVLab/InternVL3-8B-hf)."
         )
 
-    if "LlavaLlamaForCausalLM" in getattr(config, "architectures", []):
+    if isinstance(architectures, list) and "LlavaLlamaForCausalLM" in architectures:
         raise ValueError("Please download llava models with hf-compatible format: https://huggingface.co/llava-hf")
 
     if getattr(config, "model_type", None) == "internlm3" and not is_transformers_version_greater_than("4.47.1"):
@@ -152,16 +157,13 @@ def patch_config(
     # deepspeed zero3 is not compatible with low_cpu_mem_usage
     init_kwargs["low_cpu_mem_usage"] = model_args.low_cpu_mem_usage and (not is_deepspeed_zero3_enabled())
 
-    # do not cast data type of the model deepspeed zero3 without qlora
-    if not (is_deepspeed_zero3_enabled() and model_args.quantization_bit is None):
-        init_kwargs["torch_dtype"] = model_args.compute_dtype
+    # fsdp/deepspeed zero3 does not need device map
+    if not (is_deepspeed_zero3_enabled() or is_fsdp_enabled()) and init_kwargs["low_cpu_mem_usage"]:
+        if "device_map" not in init_kwargs and model_args.device_map:
+            init_kwargs["device_map"] = model_args.device_map  # device map requires low_cpu_mem_usage=True
 
-        if init_kwargs["low_cpu_mem_usage"] and not is_fsdp_enabled():  # fsdp does not need device map
-            if "device_map" not in init_kwargs and model_args.device_map:
-                init_kwargs["device_map"] = model_args.device_map  # device map requires low_cpu_mem_usage=True
-
-            if init_kwargs.get("device_map", None) == "auto":
-                init_kwargs["offload_folder"] = model_args.offload_folder
+        if init_kwargs.get("device_map", None) == "auto":
+            init_kwargs["offload_folder"] = model_args.offload_folder
 
 
 def patch_model(

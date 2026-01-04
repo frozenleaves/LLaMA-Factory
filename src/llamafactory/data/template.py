@@ -981,7 +981,7 @@ register_template(
     replace_eos=True,
     replace_jinja_template=True,
     template_class=ReasoningTemplate,
-    mm_plugin=get_mm_plugin(name="ernie_vl", image_token="<|image@placeholder|>", video_token="<|video@placeholder|>"),
+    mm_plugin=get_mm_plugin(name="ernie_vl", image_token="<|IMAGE_PLACEHOLDER|>", video_token="<|VIDEO_PLACEHOLDER|>"),
 )
 
 
@@ -1166,7 +1166,7 @@ register_template(
 
 
 register_template(
-    name="gpt",
+    name="gpt_oss",
     format_user=StringFormatter(slots=["<|start|>user<|message|>{{content}}<|end|><|start|>assistant"]),
     format_assistant=StringFormatter(slots=["{{content}}<|end|>"]),
     format_system=StringFormatter(slots=["<|start|>system<|message|>{{content}}<|end|>"]),
@@ -1610,6 +1610,26 @@ register_template(
     template_class=ReasoningTemplate,
 )
 
+
+# copied from qwen template
+register_template(
+    name="mimo_v2",
+    format_user=StringFormatter(slots=["<|im_start|>user\n{{content}}<|im_end|>\n<|im_start|>assistant\n"]),
+    format_assistant=StringFormatter(slots=["{{content}}<|im_end|>\n"]),
+    format_system=StringFormatter(slots=["<|im_start|>system\n{{content}}<|im_end|>\n"]),
+    format_function=FunctionFormatter(slots=["{{content}}<|im_end|>\n"], tool_format="qwen"),
+    format_observation=StringFormatter(
+        slots=["<|im_start|>user\n<tool_response>\n{{content}}\n</tool_response><|im_end|>\n<|im_start|>assistant\n"]
+    ),
+    format_tools=ToolFormatter(tool_format="qwen"),
+    default_system="You are MiMo, a helpful AI assistant engineered by Xiaomi.",
+    stop_words=["<|im_end|>"],
+    replace_eos=True,
+    thought_words=("<think>", "</think>"),
+    template_class=ReasoningTemplate,
+)
+
+
 # copied from qwen2vl
 register_template(
     name="mimo_vl",
@@ -1650,6 +1670,43 @@ register_template(
     stop_words=["<|im_end|>"],
     default_system="You are a helpful assistant. You can accept audio and text input and output voice and text.",
     mm_plugin=get_mm_plugin(name="minicpm_v", image_token="<image>", video_token="<video>", audio_token="<audio>"),
+)
+
+
+register_template(
+    name="minimax1",
+    format_user=StringFormatter(
+        slots=[
+            "<beginning_of_sentence>user name=user\n{{content}}<end_of_sentence>\n<beginning_of_sentence>ai name=assistant\n"
+        ]
+    ),
+    format_assistant=StringFormatter(slots=["{{content}}<end_of_sentence>\n"]),
+    format_system=StringFormatter(
+        slots=["<beginning_of_sentence>system ai_setting=assistant\n{{content}}<end_of_sentence>\n"]
+    ),
+    format_function=FunctionFormatter(slots=["{{content}}<end_of_sentence>\n"], tool_format="minimax1"),
+    format_observation=StringFormatter(
+        slots=[
+            "<beginning_of_sentence>tool name=tools\n{{content}}<end_of_sentence>\n<beginning_of_sentence>ai name=assistant\n"
+        ]
+    ),
+    format_tools=ToolFormatter(tool_format="minimax1"),
+    default_system="You are a helpful assistant.",
+    stop_words=["<end_of_sentence>"],
+)
+
+
+register_template(
+    name="minimax2",
+    format_user=StringFormatter(slots=["]~b]user\n{{content}}[e~[\n]~b]ai\n"]),
+    format_assistant=StringFormatter(slots=["{{content}}[e~[\n"]),
+    format_system=StringFormatter(slots=["]~!b[]~b]system\n{{content}}[e~[\n"]),
+    format_function=FunctionFormatter(slots=["{{content}}[e~[\n"], tool_format="minimax2"),
+    format_observation=StringFormatter(slots=["]~b]tool\n<response>{{content}}</response>[e~[\n]~b]ai\n"]),
+    format_tools=ToolFormatter(tool_format="minimax2"),
+    default_system="You are a helpful assistant. Your name is MiniMax-M2.1 and is built by MiniMax.",
+    stop_words=["[e~["],
+    template_class=ReasoningTemplate,
 )
 
 
@@ -2218,6 +2275,21 @@ register_template(
     stop_words=["###"],
     efficient_eos=True,
     mm_plugin=get_mm_plugin(name="llava", image_token="<image>"),
+)
+
+
+register_template(
+    name="youtu",
+    format_user=StringFormatter(slots=["<|User|>{{content}}<|Assistant|>"]),
+    format_assistant=StringFormatter(slots=["{{content}}<|end_of_text|>"]),
+    format_system=StringFormatter(slots=["{{content}}"]),
+    format_function=FunctionFormatter(slots=["{{content}}"], tool_format="default"),
+    format_observation=StringFormatter(slots=["<tool_response>\n{{content}}\n</tool_response><|Assistant|>"]),
+    format_tools=ToolFormatter(tool_format="default"),
+    format_prefix=EmptyFormatter(slots=[{"bos_token"}]),
+    stop_words=["<|end_of_text|>"],
+    replace_eos=True,
+    template_class=ReasoningTemplate,
 )
 
 
