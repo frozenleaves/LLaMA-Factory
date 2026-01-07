@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import pytest
 
 import pytest
 import torch.multiprocessing as mp
@@ -21,6 +22,12 @@ from llamafactory.v1.accelerator.helper import ReduceOp
 from llamafactory.v1.accelerator.interface import DistributedInterface
 from llamafactory.v1.utils.env import find_available_port
 from llamafactory.v1.utils.pytest import dist_env
+
+import torch
+
+@pytest.mark.runs_on(["cpu"])
+def test_cuda():
+    assert torch.torch.cuda.is_available() is True
 
 
 def _all_reduce_tests(local_rank: int, world_size: int, master_port: int):
