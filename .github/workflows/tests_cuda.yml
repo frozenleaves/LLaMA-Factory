@@ -27,13 +27,20 @@ jobs:
         python:
           - "3.11"
         os:
-          - "linux-x86_64-gpu-2"
+          - "self-hosted"
 
     runs-on: ${{ matrix.os }}
 
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}-${{ matrix.os }}-${{ matrix.python }}
       cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+    # 1. 定义全局环境变量，指向本地磁盘的持久化目录
+    # 这里使用 github.workspace 的上级目录，确保 checkout 清理代码时不会删除缓存
+    env:
+      HF_HOME: "${{ github.workspace }}/../.runner_cache/huggingface"
+      UV_CACHE_DIR: "${{ github.workspace }}/../.runner_cache/uv"
+      UV_NO_SYNC: 1 # 保持你原本的设置
 
     steps:
       - name: Checkout
@@ -44,45 +51,35 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           github-token: ${{ github.token }}
+          # 2. 关键点：禁用 setup-uv 自带的 GitHub Actions Cache 功能
+          # 这样 uv 就会使用我们上面环境变量定义的本地路径
           enable-cache: false
 
       - name: Check GPU Status
         run: nvidia-smi
 
       - name: Install dependencies
+        # uv 会自动识别 UV_CACHE_DIR 并复用本地文件
         run: |
           uv venv
           uv pip install -e ".[dev]"
 
-      - name: Cache HuggingFace models
-        id: hf-hub-cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}/huggingface
-          key: hf-cache-${{ runner.os }}-${{ hashFiles('tests/version.txt') }}
+      # 已删除 actions/cache 步骤
 
       - name: Check quality
         run: |
           make style && make quality
-        env:
-          UV_NO_SYNC: 1
 
       - name: Check license
         run: |
           make license
-        env:
-          UV_NO_SYNC: 1
 
       - name: Check build
         run: |
           make build
-        env:
-          UV_NO_SYNC: 1
 
       - name: Test with pytest
+        # 3. 这里不再需要动态计算 HF_HUB_OFFLINE
+        # 本地硬盘有缓存 HF 就会自动用，没有就会自动下
         run: |
           make test
-        env:
-          UV_NO_SYNC: 1
-          HF_HOME: ${{ runner.temp }}/huggingface
-          HF_HUB_OFFLINE: "${{ steps.hf-hub-cache.outputs.cache-hit == 'true' && '1' || '0' }}"
