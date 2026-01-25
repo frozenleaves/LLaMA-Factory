@@ -23,7 +23,8 @@ This module implements the token routing logic for MoE models with expert parall
 3. Combine: Gather results back via AllToAll and apply routing weights
 """
 
-from typing import Callable, Optional
+from collections.abc import Callable
+from typing import Optional
 
 import torch
 import torch.distributed as dist
@@ -136,9 +137,7 @@ def dispatch_preprocess(
 
     # Global indices for unpermutation after receiving tokens
     if expert_ids_per_ep_rank is not None:
-        global_indices = torch.repeat_interleave(
-            expert_ids_per_ep_rank, num_global_tokens_per_local_expert.ravel()
-        )
+        global_indices = torch.repeat_interleave(expert_ids_per_ep_rank, num_global_tokens_per_local_expert.ravel())
     else:
         # Create default mapping
         device = get_current_accelerator()
@@ -178,9 +177,7 @@ def alltoall_dispatch(
     hidden_states, unpermute_indices1 = permute(hidden_states, top_k_index)
 
     # AllToAll: send tokens to appropriate EP ranks
-    hidden_states = all_to_all(
-        ep_group, hidden_states, output_splits.tolist(), input_splits.tolist()
-    )
+    hidden_states = all_to_all(ep_group, hidden_states, output_splits.tolist(), input_splits.tolist())
 
     # Permute received tokens by local expert assignment
     hidden_states, unpermute_indices2 = permute(hidden_states, global_indices)
@@ -214,14 +211,26 @@ def alltoall_combine(
     hidden_states = unpermute(hidden_states, unpermute_indices2)
 
     # AllToAll: gather outputs back to original ranks
-    hidden_states = all_to_all(
-        ep_group, hidden_states, input_splits.tolist(), output_splits.tolist()
-    )
+    hidden_states = all_to_all(ep_group, hidden_states, input_splits.tolist(), output_splits.tolist())
 
     # Unpermute and apply routing weights
     hidden_states = unpermute(hidden_states, unpermute_indices1, top_k_weights)
 
     return hidden_states
+
+
+def _ensure_local_tensor(tensor: torch.Tensor) -> torch.Tensor:
+    """Ensure tensor is a local tensor, not DTensor.
+
+    Args:
+        tensor: Input tensor (may be DTensor).
+
+    Returns:
+        Local tensor.
+    """
+    if hasattr(tensor, "to_local"):
+        return tensor.to_local()
+    return tensor
 
 
 def eager_experts_computation(
@@ -243,6 +252,11 @@ def eager_experts_computation(
     Returns:
         Expert output hidden states.
     """
+    # Ensure weights are local tensors (not DTensor)
+    gate_up_weights = _ensure_local_tensor(gate_up_weights)
+    down_weights = _ensure_local_tensor(down_weights)
+    hidden_states = _ensure_local_tensor(hidden_states)
+
     # Split hidden states by expert
     splits = split_list.tolist()
     hidden_splits = torch.split(hidden_states, splits, dim=0)
@@ -251,18 +265,27 @@ def eager_experts_computation(
     for i, (h, n_tokens) in enumerate(zip(hidden_splits, splits)):
         if n_tokens == 0:
             continue
+
+        # Get weights for this expert (ensure they are local tensors)
+        gate_up_w = gate_up_weights[i]
+        down_w = down_weights[i]
+
+        # Ensure indexed weights are also local tensors
+        gate_up_w = _ensure_local_tensor(gate_up_w)
+        down_w = _ensure_local_tensor(down_w)
+
         # Gate-up projection
-        gate_up = torch.matmul(h, gate_up_weights[i].T)
+        gate_up = torch.matmul(h, gate_up_w.T)
         gate, up = gate_up.chunk(2, dim=-1)
         # Activation and down projection
         act = act_fn(gate) * up
-        out = torch.matmul(act, down_weights[i].T)
+        out = torch.matmul(act, down_w.T)
         outputs.append(out)
 
     if outputs:
         return torch.cat(outputs, dim=0)
     else:
-        return hidden_states.new_empty(0, down_weights.size(-1))
+        return hidden_states.new_empty(0, down_weights.shape[-1])
 
 
 def dispatch_mlp_combine(
@@ -303,14 +326,10 @@ def dispatch_mlp_combine(
     )
 
     # Expert computation
-    hidden_states = eager_experts_computation(
-        hidden_states, permute_indices[0], gate_up_weights, down_weights, act_fn
-    )
+    hidden_states = eager_experts_computation(hidden_states, permute_indices[0], gate_up_weights, down_weights, act_fn)
 
     # Combine outputs via AllToAll
-    hidden_states = alltoall_combine(
-        ep_group, hidden_states, top_k_weights, unpermute_indices, split_sizes
-    )
+    hidden_states = alltoall_combine(ep_group, hidden_states, top_k_weights, unpermute_indices, split_sizes)
 
     return hidden_states
 
@@ -359,14 +378,46 @@ def get_experts_forward_fn(
         """
         hidden_states_shape = hidden_states.shape
 
-        # Get local weights (convert from DTensor if needed)
-        gate_up_proj = self.gate_up_proj
-        down_proj = self.down_proj
+        # Get weights - handle different expert module structures
+        # Try common attribute names for expert weights
+        gate_up_proj = None
+        down_proj = None
 
+        # Check for gate_up_proj (combined gate and up projection)
+        if hasattr(self, "gate_up_proj"):
+            gate_up_proj = self.gate_up_proj
+            if hasattr(gate_up_proj, "weight"):
+                gate_up_proj = gate_up_proj.weight
+        elif hasattr(self, "w1") and hasattr(self, "w3"):
+            # Some models use w1 (gate) and w3 (up) separately
+            # We'd need to handle this differently - for now skip
+            pass
+
+        # Check for down_proj
+        if hasattr(self, "down_proj"):
+            down_proj = self.down_proj
+            if hasattr(down_proj, "weight"):
+                down_proj = down_proj.weight
+        elif hasattr(self, "w2"):
+            down_proj = self.w2
+            if hasattr(down_proj, "weight"):
+                down_proj = down_proj.weight
+
+        if gate_up_proj is None or down_proj is None:
+            raise RuntimeError(
+                f"Cannot find expert weights in module {type(self).__name__}. "
+                "Expected 'gate_up_proj' and 'down_proj' attributes."
+            )
+
+        # Convert DTensor to local tensor if needed
         if hasattr(gate_up_proj, "to_local"):
             gate_up_proj = gate_up_proj.to_local()
         if hasattr(down_proj, "to_local"):
             down_proj = down_proj.to_local()
+
+        # Ensure hidden_states is also a local tensor
+        if hasattr(hidden_states, "to_local"):
+            hidden_states = hidden_states.to_local()
 
         weights = (gate_up_proj, down_proj)
         act_fn = self.act_fn if hasattr(self, "act_fn") else torch.nn.functional.silu
