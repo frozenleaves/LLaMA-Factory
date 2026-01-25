@@ -32,7 +32,7 @@ import fnmatch
 import gc
 import os
 import types
-from typing import Optional, Set
+from typing import Optional
 
 import torch
 import torch.distributed as dist
@@ -140,6 +140,10 @@ class FSDP2EPEngine:
         else:
             self.ep_state = None
 
+        # Track expert parameter sharding info for weight loading
+        # Maps param name -> (shard_dim, ep_rank, ep_size)
+        self._expert_param_shard_info: dict[str, tuple[int, int, int]] = {}
+
         # Get standard FSDP device mesh from DistributedInterface
         self.device_mesh = self.dist_interface.data_device_mesh
         if self.device_mesh is not None:
@@ -193,7 +197,7 @@ class FSDP2EPEngine:
 
         return expert_modules
 
-    def _get_expert_param_names(self, model: PreTrainedModel) -> Set[str]:
+    def _get_expert_param_names(self, model: PreTrainedModel) -> set[str]:
         """Get parameter names that belong to expert modules.
 
         Args:
@@ -240,9 +244,7 @@ class FSDP2EPEngine:
                 continue
 
             if num_global_experts % ep_size != 0:
-                raise ValueError(
-                    f"Number of experts ({num_global_experts}) must be divisible by ep_size ({ep_size})."
-                )
+                raise ValueError(f"Number of experts ({num_global_experts}) must be divisible by ep_size ({ep_size}).")
 
             num_local_experts = num_global_experts // ep_size
             local_expert_offset = ep_rank * num_local_experts
@@ -260,7 +262,8 @@ class FSDP2EPEngine:
                 )
 
             # Distribute expert weights using DTensor with Shard(0)
-            self._distribute_expert_weights(module, ep_mesh)
+            # Also record sharding info for weight loading
+            self._distribute_expert_weights(module, ep_mesh, module_name, ep_rank, ep_size)
 
             # Replace forward function with EP-aware version
             new_forward = get_experts_forward_fn(
@@ -276,21 +279,37 @@ class FSDP2EPEngine:
 
         return model
 
-    def _distribute_expert_weights(self, module: nn.Module, ep_mesh: DeviceMesh) -> None:
+    def _distribute_expert_weights(
+        self,
+        module: nn.Module,
+        ep_mesh: DeviceMesh,
+        module_path: str,
+        ep_rank: int,
+        ep_size: int,
+    ) -> None:
         """Distribute expert weights as DTensors sharded on dim=0.
 
         Args:
             module: Expert module.
             ep_mesh: Device mesh for EP dimension.
+            module_path: Full path to the module (for tracking sharding info).
+            ep_rank: Rank in the EP group.
+            ep_size: Size of the EP group.
         """
         for name, param in module.named_parameters(recurse=False):
             if param.requires_grad:
+                # Record sharding info for weight loading
+                full_param_name = f"{module_path}.{name}" if module_path else name
+                # Store (shard_dim, ep_rank, ep_size, original_shape)
+                self._expert_param_shard_info[full_param_name] = (0, ep_rank, ep_size)
+
                 # Shard on first dimension (expert dimension)
                 dist_param = nn.Parameter(distribute_tensor(param.data, ep_mesh, [Shard(0)]))
                 module.register_parameter(name, dist_param)
 
         for child_name, child_module in module.named_children():
-            self._distribute_expert_weights(child_module, ep_mesh)
+            child_path = f"{module_path}.{child_name}" if module_path else child_name
+            self._distribute_expert_weights(child_module, ep_mesh, child_path, ep_rank, ep_size)
 
     def _apply_grad_division_hook(self, module: nn.Module, divide_factor: float) -> None:
         """Apply gradient division hooks for proper gradient averaging.
@@ -302,9 +321,7 @@ class FSDP2EPEngine:
         for param in module.parameters():
             if param.requires_grad:
                 # Use gradient accumulation hook
-                param.register_post_accumulate_grad_hook(
-                    lambda p, factor=divide_factor: p.grad.mul_(1.0 / factor)
-                )
+                param.register_post_accumulate_grad_hook(lambda p, factor=divide_factor: p.grad.mul_(1.0 / factor))
 
     def _apply_expert_fsdp(self, model: PreTrainedModel) -> PreTrainedModel:
         """Apply Expert FSDP to expert modules.
@@ -392,15 +409,13 @@ class FSDP2EPEngine:
                     should_wrap = True
 
             # Skip if this module is an expert module
-            is_expert = any(
-                module_name_match(pattern, name) for pattern in self.expert_module_patterns
-            )
+            is_expert = any(module_name_match(pattern, name) for pattern in self.expert_module_patterns)
             if is_expert:
                 should_wrap = False
 
             if should_wrap:
                 # Get module's own ignored params
-                module_ignored_params = set(p for p in module.parameters() if p in ignored_params)
+                module_ignored_params = {p for p in module.parameters() if p in ignored_params}
 
                 fully_shard(
                     module,
@@ -420,6 +435,7 @@ class FSDP2EPEngine:
         if hasattr(model, "enable_input_require_grads"):
             model.enable_input_require_grads()
         else:
+
             def make_inputs_require_grad(module, input, output):
                 output.requires_grad_(True)
 
@@ -503,9 +519,7 @@ class FSDP2EPEngine:
         """
         if model.device.type == "meta":
             model = self.prepare_model(model)
-            model = self.materialize_and_load(
-                model, hf_model_path=model.config.name_or_path, dcp_path=self.dcp_path
-            )
+            model = self.materialize_and_load(model, hf_model_path=model.config.name_or_path, dcp_path=self.dcp_path)
         else:
             model = self.prepare_model(model)
         return model
@@ -595,12 +609,12 @@ class FSDP2EPEngine:
                     for key in f.keys():
                         if key in param_map:
                             tensor = f.get_tensor(key)
-                            self._copy_weights(param_map[key], tensor)
+                            self._copy_weights(key, param_map[key], tensor)
             else:
                 state_dict = torch.load(ckpt_file, map_location="cpu")
                 for key, tensor in state_dict.items():
                     if key in param_map:
-                        self._copy_weights(param_map[key], tensor)
+                        self._copy_weights(key, param_map[key], tensor)
                 del state_dict
                 gc.collect()
 
@@ -674,10 +688,14 @@ class FSDP2EPEngine:
             logger.info(f"Resolved HF repo id '{hf_model_path}' to local dir: {local_dir}")
         return local_dir
 
-    def _copy_weights(self, param: nn.Parameter, loaded_tensor: torch.Tensor) -> None:
-        """Copy loaded tensor to parameter, handling DTensor sharding.
+    def _copy_weights(self, param_name: str, param: nn.Parameter, loaded_tensor: torch.Tensor) -> None:
+        """Copy loaded tensor to parameter, handling DTensor and EP sharding.
+
+        This method handles multi-dimensional sharding where a parameter may be
+        sharded across multiple mesh dimensions (e.g., EP on dim=0, EFSDP on dim=1).
 
         Args:
+            param_name: Full name of the parameter (for looking up sharding info).
             param: Target parameter (may be DTensor).
             loaded_tensor: Source tensor to copy from.
         """
@@ -685,42 +703,69 @@ class FSDP2EPEngine:
             loaded_tensor = loaded_tensor.to(param.dtype)
 
         if isinstance(param, DTensor):
-            shard_placement = None
-            mesh_dim = -1
-
-            for i, placement in enumerate(param.placements):
-                if isinstance(placement, Shard):
-                    shard_placement = placement
-                    mesh_dim = i
-                    break
+            mesh = param.device_mesh
+            my_coordinate = mesh.get_coordinate()
+            if my_coordinate is None:
+                return
 
             local_tensor = param.to_local()
+            sliced_tensor = loaded_tensor
 
-            if shard_placement is None:
-                local_tensor.copy_(loaded_tensor)
+            # Process all Shard placements - there may be multiple
+            # (e.g., EP shards on dim=0, EFSDP shards on dim=1)
+            for mesh_dim, placement in enumerate(param.placements):
+                if isinstance(placement, Shard):
+                    shard_dim = placement.dim
+                    rank_in_dim = my_coordinate[mesh_dim]
+                    world_size_in_dim = mesh.size(mesh_dim)
+
+                    # Get the full size along this dimension from the loaded tensor
+                    # (not from param.shape which may already reflect partial sharding)
+                    full_size = sliced_tensor.shape[shard_dim]
+                    chunk_size = (full_size + world_size_in_dim - 1) // world_size_in_dim
+
+                    start = rank_in_dim * chunk_size
+                    end = min(start + chunk_size, full_size)
+
+                    if start >= full_size:
+                        # This rank has no data for this shard
+                        return
+
+                    # Slice the tensor along this dimension
+                    sliced_tensor = sliced_tensor.narrow(shard_dim, start, end - start)
+
+            # Now sliced_tensor should match local_tensor shape
+            if sliced_tensor.shape != local_tensor.shape:
+                # Handle potential padding differences
+                slices = [slice(0, min(s, l)) for s, l in zip(sliced_tensor.shape, local_tensor.shape)]
+                local_tensor[tuple(slices)].copy_(sliced_tensor[tuple(slices)])
             else:
-                dim = shard_placement.dim
-                mesh = param.device_mesh
-                my_coordinate = mesh.get_coordinate()
-                if my_coordinate is None:
-                    return
+                local_tensor.copy_(sliced_tensor)
 
-                rank_in_dim = my_coordinate[mesh_dim]
-                world_size_in_dim = mesh.size(mesh_dim)
+        elif param_name in self._expert_param_shard_info:
+            # Handle expert parameters that lost DTensor structure after to_empty()
+            # Use stored sharding info to slice the loaded tensor
+            shard_dim, ep_rank, ep_size = self._expert_param_shard_info[param_name]
 
-                full_size = param.shape[dim]
-                chunk_size = (full_size + world_size_in_dim - 1) // world_size_in_dim
+            full_size = loaded_tensor.shape[shard_dim]
+            chunk_size = (full_size + ep_size - 1) // ep_size
 
-                start = rank_in_dim * chunk_size
-                end = min(start + chunk_size, full_size)
+            start = ep_rank * chunk_size
+            end = min(start + chunk_size, full_size)
 
-                if start >= full_size:
-                    return
+            if start >= full_size:
+                return
 
-                sliced_tensor = loaded_tensor.narrow(dim, start, end - start)
+            sliced_tensor = loaded_tensor.narrow(shard_dim, start, end - start)
 
-                slices = [slice(None)] * local_tensor.ndim
-                slices[dim] = slice(0, sliced_tensor.shape[dim])
-                local_tensor[tuple(slices)].copy_(sliced_tensor)
+            # Copy to parameter
+            if sliced_tensor.shape != param.data.shape:
+                # Handle potential shape differences
+                slices = [slice(0, min(s, p)) for s, p in zip(sliced_tensor.shape, param.data.shape)]
+                param.data[tuple(slices)].copy_(sliced_tensor[tuple(slices)])
+            else:
+                param.data.copy_(sliced_tensor)
+
         else:
+            # Regular parameter, no sharding
             param.data.copy_(loaded_tensor)
