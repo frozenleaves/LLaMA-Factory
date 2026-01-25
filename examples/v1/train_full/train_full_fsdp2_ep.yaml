@@ -1,0 +1,35 @@
+model: your_moe_model_path       # MoE 模型路径
+trust_remote_code: true
+model_class: llm
+
+template: qwen3_nothink
+
+kernel_config:
+    name: auto
+    include_kernels: auto
+
+quant_config: null
+
+dist_config:
+    name: fsdp2_ep
+    ep_size: 4                    # 4 路专家并行
+    efsdp_size: 2                 # 每个 EP 组内 2 路 FSDP 分片
+    mixed_precision: bf16
+    expert_modules:
+        - "*.block_sparse_moe.experts"  # Mixtral 风格
+        # 或 "*.mlp.experts"             # 其他 MoE 架构
+
+init_config:
+    name: init_on_meta
+
+### data
+train_dataset: data/v1_sft_demo.yaml
+
+### training
+output_dir: outputs
+micro_batch_size: 1
+global_batch_size: 8
+cutoff_len: 2048
+learning_rate: 1.0e-4
+bf16: true
+max_steps: 100
