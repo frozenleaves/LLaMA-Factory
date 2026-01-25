@@ -32,3 +32,26 @@ def shard_model_fsdp2(model: HFModel, dist_config: PluginConfig) -> HFModel:
 @DistributedPlugin("deepspeed").register()
 def shard_model_deepspeed(model: HFModel, dist_config: PluginConfig) -> HFModel:
     return model
+
+
+@DistributedPlugin("fsdp2_ep").register()
+def shard_model_fsdp2_ep(model: HFModel, dist_config: PluginConfig) -> HFModel:
+    """Shard model with FSDP2 + Expert Parallelism.
+
+    This plugin supports MoE models with expert parallelism:
+    - EP (Expert Parallelism): Distributes experts across ranks
+    - EFSDP (Expert FSDP): Additional FSDP sharding for expert parameters
+    - Standard FSDP: For non-expert model parameters
+
+    Configuration options in dist_config:
+        - ep_size: Expert parallel size (default: 1)
+        - efsdp_size: Expert FSDP size (default: 1)
+        - mixed_precision: "bf16", "fp16", or "fp32"
+        - expert_modules: List of patterns to match expert modules (e.g., ["*.mlp.experts"])
+        - reshard_after_forward: Whether to reshard after forward pass
+        - offload_params: Whether to offload parameters to CPU
+        - dcp_path: Path for distributed checkpoint
+    """
+    from .fsdp2_ep import FSDP2EPEngine
+
+    return FSDP2EPEngine(dist_config).shard_model(model)
