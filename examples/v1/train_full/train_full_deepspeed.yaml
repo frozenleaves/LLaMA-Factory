@@ -1,0 +1,41 @@
+#model: /root/lcx/models/Qwen3-30B-A3B
+model: /home/frozen/models/Qwen3-0.6B
+
+trust_remote_code: true
+model_class: llm
+
+template: qwen3_nothink
+
+kernel_config:
+    name: auto
+    include_kernels: auto # choice: null/true/false/auto/kernel_id1,kernel_id2,kernel_id3, default is null
+
+quant_config: null
+
+dist_config:
+    name: deepspeed
+    config_file: examples/deepspeed/ds_z2_config.json
+
+
+# dist_config:
+#     name: fsdp2
+
+
+init_config:
+     name: init_on_default
+
+### data
+train_dataset: data/v1_sft_demo.yaml 
+
+### training
+output_dir: outputs/Qwen3-0.6B-deepspeed
+micro_batch_size: 4
+# global_batch_size: 64
+cutoff_len: 2048
+learning_rate: 1.0e-4
+bf16: false
+max_steps: 10
+
+### sample
+sample_backend: hf
+max_new_tokens: 128
