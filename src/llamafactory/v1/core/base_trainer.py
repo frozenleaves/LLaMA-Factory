@@ -36,7 +36,6 @@ import torch.nn.functional as F
 from ..accelerator.helper import ReduceOp
 from ..accelerator.interface import Dim, DistributedInterface
 from ..config import TrainingArguments
-from ..plugins.trainer_plugins.distributed.hub import DistributedPlugin
 from ..utils import logging
 from ..utils.helper import compute_valid_tokens
 from ..utils.types import BatchInput, HFModel, ModelOutput, Tensor, TorchDataset
@@ -99,6 +98,7 @@ class BaseTrainer:
         if self.args.dist_config is not None:
             # Create the plugin instance based on configuration
             from ..plugins.trainer_plugins.distributed.hub import DistributedPlugin
+            
             self.dist_plugin = DistributedPlugin(self.args.dist_config.name)
             # Cache hooks immediately after plugin creation
             self._cache_plugin_funcs()
