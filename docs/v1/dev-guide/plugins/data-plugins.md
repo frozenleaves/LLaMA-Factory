@@ -19,12 +19,11 @@ Alpaca 格式是一种常见的指令微调数据格式：
 
 ```json
 {
-  "system": "You are a helpful assistant.",  // 可选
+  "system": "You are a helpful assistant.",
   "instruction": "Describe a process of making crepes.",
-  "input": "",  // 可选
+  "input": "",
   "output": "Making crepes is an easy and delicious process..."
 }
-```
 
 #### 2.2 Alpaca Converter 接口定义
 
