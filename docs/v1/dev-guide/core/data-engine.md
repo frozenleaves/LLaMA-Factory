@@ -204,7 +204,7 @@ for dataset_name, dataset in self.datasets.items():
 
 #### 3.4 `_convert_data_sample`：数据格式标准化
 
-将原始数据转换为标准格式，`DataConverterPlugin`插件在此处被调用，具体调用的插件由 `get_dataset_info` 方法获取的 `converter` 信息指定，若 `converter` 为空则假定数据集为标准格式，此方法由`DataEngine`的` __getitem__`方法调用。
+将原始数据转换为标准格式，`DataConverterPlugin`插件在此处被调用，具体调用的插件由 `get_dataset_info` 方法获取的 `converter` 信息指定，若 `converter` 为空则假定数据集为标准格式，此方法由`DataEngine`的 `__getitem__` 方法调用。
 
 ```python
 def _convert_data_sample(self, raw_sample: dict, dataset_name: str) -> Sample:
