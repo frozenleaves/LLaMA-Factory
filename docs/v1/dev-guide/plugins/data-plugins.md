@@ -460,7 +460,7 @@ class DataSelectorPlugin:
                 - 若为多个索引或切片：返回多个样本的列表
 
         except:
+        Raises:
             ValueError: 当输入索引类型不受支持时抛出。
-        """
         ...
 ```
