@@ -66,7 +66,7 @@ model = AutoModelForCausalLM.from_pretrained("qwen/qwen2.5-0.5B")
 model = apply_kernel("npu_fused_rope", model=model)
 model = apply_kernel("npu_fused_rmsnorm", model=model)
 model = apply_kernel("npu_fused_swiglu", model=model)
-```
+model = apply_kernel("npu_fused_moe", model=model)
 
 ### 3. 查询已注册的可用 kernels
 
