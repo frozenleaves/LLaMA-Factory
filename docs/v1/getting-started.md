@@ -52,7 +52,7 @@ pip install -e .
 
 ### 数据准备
 
-关于数据集文件的格式，请参考 [data-preparation/README.md](data-preparation/README.md) 的内容。你可以使用 HuggingFace / ModelScope / Modelers 上的数据集或加载本地数据集。
+关于数据集文件的格式，请参考 [data-preparation/README.md](data-preparation/README.md) 的内容。你可以使用 HuggingFace / ModelScope 上的数据集或加载本地数据集。
 
 > [!NOTE]
 > 使用自定义数据集或自定义数据集格式时，请参照 [data-preparation/README.md](data-preparation/README.md) 进行配置，如有必要，请重新实现自定义数据集的数据处理逻辑，包括对应的`converter`。
