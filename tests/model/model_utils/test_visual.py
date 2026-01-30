@@ -16,11 +16,17 @@ import os
 
 import pytest
 import torch
-from transformers import AutoConfig, AutoModelForVision2Seq
+from transformers import AutoConfig
 
 from llamafactory.extras.packages import is_transformers_version_greater_than
 from llamafactory.hparams import FinetuningArguments, ModelArguments
 from llamafactory.model.adapter import init_adapter
+
+
+if is_transformers_version_greater_than("5.0.0"):
+    from transformers import AutoModelForImageTextToText
+else:
+    from transformers import AutoModelForVision2Seq as AutoModelForImageTextToText
 
 
 @pytest.mark.parametrize("freeze_vision_tower", (False, True))
@@ -36,7 +42,7 @@ def test_visual_full(freeze_vision_tower: bool, freeze_multi_modal_projector: bo
     )
     config = AutoConfig.from_pretrained(model_args.model_name_or_path)
     with torch.device("meta"):
-        model = AutoModelForVision2Seq.from_config(config)
+        model = AutoModelForImageTextToText.from_config(config)
 
     model = init_adapter(config, model, model_args, finetuning_args, is_trainable=True)
     for name, param in model.named_parameters():
@@ -56,7 +62,7 @@ def test_visual_lora(freeze_vision_tower: bool, freeze_language_model: bool):
     )
     config = AutoConfig.from_pretrained(model_args.model_name_or_path)
     with torch.device("meta"):
-        model = AutoModelForVision2Seq.from_config(config)
+        model = AutoModelForImageTextToText.from_config(config)
 
     model = init_adapter(config, model, model_args, finetuning_args, is_trainable=True)
     trainable_params, frozen_params = set(), set()
@@ -86,7 +92,7 @@ def test_visual_model_save_load():
     finetuning_args = FinetuningArguments(finetuning_type="full")
     config = AutoConfig.from_pretrained(model_args.model_name_or_path)
     with torch.device("meta"):
-        model = AutoModelForVision2Seq.from_config(config)
+        model = AutoModelForImageTextToText.from_config(config)
 
     model = init_adapter(config, model, model_args, finetuning_args, is_trainable=False)
     loaded_model_weight = dict(model.named_parameters())
