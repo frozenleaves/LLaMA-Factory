@@ -61,12 +61,13 @@ pip install -e .
 
 ### 快速开始
 
-下面三行命令分别对 Qwen3-4B-Instruct 模型进行 全参**微调**、**推理**和**合并**。
+下面的命令展示了对 Qwen3-0.6B 模型使用 FSDP2 进行 全参**微调**，两行命令等价。
 
 ```bash
-llamafactory-cli train examples/train_lora/qwen3_lora_sft.yaml
-llamafactory-cli chat examples/inference/qwen3_lora_sft.yaml
-llamafactory-cli export examples/merge_lora/qwen3_lora_sft.yaml
+export USE_V1=1
+llamafactory-cli sft examples/v1/train_full/train_full_fsdp2.yaml
+llamafactory-cli train examples/v1/train_full/train_full_fsdp2.yaml
+
 ```
 
 高级用法请参考 [advanced](./advanced/README.md)（包括多卡多机微调、分布式、Lora、量化、以及各种加速特性等）。
