@@ -19,10 +19,8 @@ import torch
 from transformers import (
     AutoConfig,
     AutoModelForCausalLM,
-    AutoModelForImageTextToText,
     AutoModelForSeq2SeqLM,
     AutoModelForTextToWaveform,
-    AutoModelForVision2Seq,
     AutoProcessor,
     AutoTokenizer,
 )
@@ -30,7 +28,7 @@ from trl import AutoModelForCausalLMWithValueHead
 
 from ..extras import logging
 from ..extras.misc import count_parameters, skip_check_imports, try_download_model_from_other_hub
-from ..extras.packages import is_torch_version_greater_than
+from ..extras.packages import is_torch_version_greater_than, is_transformers_version_greater_than
 from .adapter import init_adapter
 from .model_utils.ktransformers import load_kt_pretrained_model
 from .model_utils.liger_kernel import apply_liger_kernel
@@ -40,6 +38,11 @@ from .model_utils.unsloth import load_unsloth_pretrained_model
 from .model_utils.valuehead import load_valuehead_params
 from .patcher import patch_config, patch_model, patch_processor, patch_tokenizer, patch_valuehead_model
 
+
+if is_transformers_version_greater_than("5.0.0"):
+    from transformers import AutoModelForImageTextToText
+else:
+    from transformers import AutoModelForVision2Seq as AutoModelForImageTextToText
 
 if TYPE_CHECKING:
     from transformers import PretrainedConfig, PreTrainedModel, PreTrainedTokenizer, ProcessorMixin
@@ -166,8 +169,8 @@ def load_model(
         else:
             if type(config) in AutoModelForImageTextToText._model_mapping.keys():  # image-text
                 load_class = AutoModelForImageTextToText
-            elif type(config) in AutoModelForVision2Seq._model_mapping.keys():  # image-text
-                load_class = AutoModelForVision2Seq
+            elif type(config) in AutoModelForImageTextToText._model_mapping.keys():  # image-text
+                load_class = AutoModelForImageTextToText
             elif type(config) in AutoModelForSeq2SeqLM._model_mapping.keys():  # audio-text
                 load_class = AutoModelForSeq2SeqLM
             elif type(config) in AutoModelForTextToWaveform._model_mapping.keys():  # audio hack for qwen omni
