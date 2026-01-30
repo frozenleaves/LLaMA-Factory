@@ -9,7 +9,7 @@ LLaMA-Factory 提供了一系列针对特定硬件优化的融合算子。这些
 ### NpuFusedRMSNorm
 RMSNorm（Root Mean Square Layer Normalization）是一种常用于大模型的归一化方法。在推理或训练中，RMSNorm 融合算子 将bias、residual等操作进行融合，可以减少显存访问次数，加速计算。
 
- Ascend npu 通过 `torch_npu.npu_rms_norm` 接口提供 RMSNorm 融合算子调用接口，支持 float16, bfloat16, float 等数据格式。RMSNorm 算子常见于Qwen等LLM模型中，由于torch侧没有提供 RMSNorm 算子的接口，因此在模型中通常是以自定义类的形式出现，通过替换 RMSNorm 类的 `forward` 方法即可使能。
+Ascend npu 通过 `torch_npu.npu_rms_norm` 接口提供 RMSNorm 融合算子调用接口，支持 float16, bfloat16, float 等数据格式。RMSNorm 算子常见于Qwen等LLM模型中，由于torch侧没有提供 RMSNorm 算子的接口，因此在模型中通常是以自定义类的形式出现，通过替换 RMSNorm 类的 `forward` 方法即可使能。
 
  ```python
 def _npu_rms_forward(self, hidden_states):
