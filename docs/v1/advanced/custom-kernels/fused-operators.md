@@ -76,7 +76,7 @@ def _apply_rotary_pos_emb(q, k, cos, sin, position_ids=None, unsqueeze_dim=1):
 
 
 ### NpuFusedMoE
-**NpuFusedMoE**
+### NpuFusedMoE
 MoE（Mixture of Experts）模型通过稀疏激活扩展容量。在原生 Transformers 实现中，使用串行循环遍历专家，导致内核启动开销大、硬件利用率低。
 
 **MoE 融合算子** 利用 **GMM（Grouped Matrix Multiplication，分组矩阵乘）** 技术，支持在单个硬件指令内并行处理多组不同形状（行数不一）的矩阵乘法，消减循环开销，同时无需额外的显存复制，显著提升训练性能。
