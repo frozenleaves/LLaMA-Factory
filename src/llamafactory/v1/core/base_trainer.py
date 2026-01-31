@@ -245,7 +245,15 @@ class BaseTrainer:
 
     def fit(self) -> None:
         """Train the model."""
+        from tqdm import tqdm
+
         self.model.train()
+        
+        # Initialize progress bar on rank 0
+        progress_bar = None
+        if DistributedInterface().get_rank() == 0:
+            progress_bar = tqdm(total=self.num_training_steps, desc="Training", leave=True)
+
         for epoch in range(self.args.num_train_epochs):
             self.train_batch_generator.set_epoch(epoch)
             for micro_batches in self.train_batch_generator:
@@ -266,13 +274,29 @@ class BaseTrainer:
 
                 step_loss, grad_norm = DistributedInterface().all_reduce([step_loss, grad_norm])
                 DistributedInterface().sync()
+                
                 if DistributedInterface().get_rank() == 0:
-                    print(f"Epoch {epoch}, Step {self.global_step}, Loss: {step_loss:.4f}, Grad Norm: {grad_norm:.4f}")
+                    if progress_bar is not None:
+                        log_msg = {
+                            'epoch': epoch,
+                            'step': self.global_step,
+                            'loss': f"{step_loss:.4f}",
+                            'grad_norm': f"{grad_norm:.4f}"
+                        }
+                        tqdm.write(str(log_msg))
+                        progress_bar.update(1)
+                    else:
+                        print(f"Epoch {epoch}, Step {self.global_step}, Loss: {step_loss:.4f}, Grad Norm: {grad_norm:.4f}")
 
                 # Check if max_steps is reached
                 if self.global_step >= self.num_training_steps:
                     logger.info_rank0(f"Reached max_steps ({self.num_training_steps}), stopping training.")
+                    if progress_bar is not None:
+                        progress_bar.close()
                     return
+        
+        if progress_bar is not None:
+            progress_bar.close()
 
     def save_model(self) -> None:
         """Save the model."""
@@ -281,6 +305,6 @@ class BaseTrainer:
             return save_model_fn(self)
 
         model_to_save = self.model.module if hasattr(self.model, "module") else self.model
-        model_to_save.save_pretrained(self.args.output_dir)
+        model_to_save.save_pretrained(self.args.output_dir, max_shard_size="4GB")
         self.renderer.processor.save_pretrained(self.args.output_dir)
         logger.info_rank0(f"Model saved to {self.args.output_dir}")

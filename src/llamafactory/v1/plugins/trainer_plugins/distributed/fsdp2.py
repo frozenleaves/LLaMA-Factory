@@ -49,6 +49,23 @@ def get_transformer_layer_cls(model: PreTrainedModel) -> type[nn.Module] | None:
     return None
 
 
+def save_model(trainer) -> None:
+    model = trainer.model
+    args = trainer.args
+
+    if DistributedInterface().get_rank() == 0:
+        logger.info("Gathering state dict for saving...")
+
+    options = StateDictOptions(full_state_dict=True, cpu_offload=True)
+    state_dict = get_model_state_dict(model, options=options)
+
+    if DistributedInterface().get_rank() == 0:
+        model_to_save = model.module if hasattr(model, "module") else model
+        model_to_save.save_pretrained(args.output_dir, state_dict=state_dict, max_shard_size="5GB")
+        trainer.renderer.processor.save_pretrained(args.output_dir)
+        logger.info(f"Model saved to {args.output_dir}")
+
+
 class FSDP2Engine:
     def __init__(self, dist_config: dict):
         self.dist_interface = DistributedInterface()

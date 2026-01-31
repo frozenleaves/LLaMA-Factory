@@ -29,6 +29,13 @@ def shard_model_fsdp2(model: HFModel, dist_config: PluginConfig, **kwargs) -> HF
     return FSDP2Engine(dist_config).shard_model(model)
 
 
+@DistributedPlugin("fsdp2").register("save_model")
+def save_model_fsdp2(trainer) -> None:
+    from .fsdp2 import save_model
+
+    return save_model(trainer)
+
+
 @DistributedPlugin("deepspeed").register()
 def shard_model_deepspeed(model: HFModel, dist_config: PluginConfig, **kwargs) -> HFModel:
     from .deepspeed import DeepSpeedEngine
