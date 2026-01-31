@@ -95,10 +95,15 @@ def test_visual_model_save_load():
         model = AutoModelForImageTextToText.from_config(config)
 
     model = init_adapter(config, model, model_args, finetuning_args, is_trainable=False)
+    model.to_empty(device="cpu")
     loaded_model_weight = dict(model.named_parameters())
 
     model.save_pretrained(os.path.join("output", "qwen2_vl"), max_shard_size="10GB", safe_serialization=False)
-    saved_model_weight = torch.load(os.path.join("output", "qwen2_vl", "pytorch_model.bin"), weights_only=False)
+    if os.path.exists(os.path.join("output", "qwen2_vl", "pytorch_model.bin")):
+        saved_model_weight = torch.load(os.path.join("output", "qwen2_vl", "pytorch_model.bin"), weights_only=False)
+    else:
+        from safetensors.torch import load_file
+        saved_model_weight = load_file(os.path.join("output", "qwen2_vl", "model.safetensors"))
 
     if is_transformers_version_greater_than("4.52.0"):
         assert "model.language_model.layers.0.self_attn.q_proj.weight" in loaded_model_weight
