@@ -1,4 +1,4 @@
-#model: /root/lcx/models/Qwen3-30B-A3B
+#model: /home/frozen/models/Qwen3-30B-A3B
 model: /home/frozen/models/Qwen3-0.6B
 
 trust_remote_code: true
@@ -14,26 +14,28 @@ quant_config: null
 
 dist_config:
     name: deepspeed
-    config_file: examples/deepspeed/ds_z2_config.json
-
+    config_file: examples/deepspeed/ds_z3_config.json
 
 # dist_config:
 #     name: fsdp2
+#     dcp_path: /home/frozen/models/Qwen3-30B-A3B-dcp
 
+# init_config:
+#      name: init_on_meta
 
 init_config:
-     name: init_on_default
+    name: init_on_default
 
 ### data
 train_dataset: data/v1_sft_demo.yaml 
 
 ### training
-output_dir: outputs/Qwen3-0.6B-deepspeed
-micro_batch_size: 4
+output_dir: outputs/Qwen3-30B-A3B-deepspeed
+micro_batch_size: 1
 # global_batch_size: 64
 cutoff_len: 2048
 learning_rate: 1.0e-4
-bf16: false
+bf16: true
 max_steps: 10
 
 ### sample
