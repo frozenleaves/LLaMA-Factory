@@ -78,7 +78,7 @@ def _check_template(
         messages: the list of messages.
 
     """
-    tokenizer = AutoTokenizer.from_pretrained(model_id, token=HF_TOKEN)
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
     content_str = tokenizer.apply_chat_template(messages, tokenize=False)
     content_ids = tokenizer.apply_chat_template(messages, tokenize=True)
     if is_transformers_version_greater_than("5.0.0"):
@@ -315,7 +315,7 @@ def test_qwen3_template(cot_messages: bool):
 
 @pytest.mark.runs_on(["cpu", "mps"])
 def test_parse_llama3_template():
-    tokenizer = AutoTokenizer.from_pretrained(TINY_LLAMA3, token=HF_TOKEN)
+    tokenizer = AutoTokenizer.from_pretrained(TINY_LLAMA3)
     template = parse_template(tokenizer)
     assert template.format_user.slots == [
         "<|start_header_id|>user<|end_header_id|>\n\n{{content}}<|eot_id|>"
@@ -330,7 +330,7 @@ def test_parse_llama3_template():
 @pytest.mark.runs_on(["cpu", "mps"])
 @pytest.mark.xfail(not HF_TOKEN, reason="Authorization.")
 def test_parse_qwen_template():
-    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-7B-Instruct", token=HF_TOKEN)
+    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-7B-Instruct")
     template = parse_template(tokenizer)
     assert template.__class__.__name__ == "Template"
     assert template.format_user.slots == ["<|im_start|>user\n{{content}}<|im_end|>\n<|im_start|>assistant\n"]
@@ -343,7 +343,7 @@ def test_parse_qwen_template():
 @pytest.mark.runs_on(["cpu", "mps"])
 @pytest.mark.xfail(not HF_TOKEN, reason="Authorization.")
 def test_parse_qwen3_template():
-    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-8B", token=HF_TOKEN)
+    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-8B")
     template = parse_template(tokenizer)
     assert template.__class__.__name__ == "ReasoningTemplate"
     assert template.format_user.slots == ["<|im_start|>user\n{{content}}<|im_end|>\n<|im_start|>assistant\n"]

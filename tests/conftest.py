@@ -162,14 +162,6 @@ def _manage_distributed_env(request: FixtureRequest, monkeypatch: MonkeyPatch) -
             monkeypatch.setattr(torch.npu, "device_count", lambda: 1)
 
 
-@pytest.fixture(autouse=True)
-def _manage_hf_token_env(monkeypatch: MonkeyPatch):
-    """The hf token cannot be an empty string in transformers v5."""
-    hf_token = os.getenv("HF_TOKEN")
-    if not hf_token:
-        os.environ.pop("HF_TOKEN", None)
-
-
 @pytest.fixture
 def fix_valuehead_cpu_loading():
     """Fix valuehead model loading."""
