@@ -103,6 +103,7 @@ def test_visual_model_save_load():
         saved_model_weight = torch.load(os.path.join("output", "qwen2_vl", "pytorch_model.bin"), weights_only=False)
     else:
         from safetensors.torch import load_file
+
         saved_model_weight = load_file(os.path.join("output", "qwen2_vl", "model.safetensors"))
 
     if is_transformers_version_greater_than("4.52.0"):
