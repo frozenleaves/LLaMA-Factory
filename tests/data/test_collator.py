@@ -17,20 +17,13 @@ import os
 import pytest
 import torch
 from PIL import Image
-from transformers import AutoConfig
+from transformers import AutoConfig, AutoModelForImageTextToText
 
 from llamafactory.data import get_template_and_fix_tokenizer
 from llamafactory.data.collator import MultiModalDataCollatorForSeq2Seq, prepare_4d_attention_mask
 from llamafactory.extras.constants import IGNORE_INDEX
-from llamafactory.extras.packages import is_transformers_version_greater_than
 from llamafactory.hparams import get_infer_args
 from llamafactory.model import load_tokenizer
-
-
-if is_transformers_version_greater_than("5.0.0"):
-    from transformers import AutoModelForImageTextToText
-else:
-    from transformers import AutoModelForVision2Seq as AutoModelForImageTextToText
 
 
 TINY_LLAMA3 = os.getenv("TINY_LLAMA3", "llamafactory/tiny-random-Llama-3")
