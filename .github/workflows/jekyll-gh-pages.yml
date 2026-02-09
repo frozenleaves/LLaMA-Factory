@@ -31,8 +31,12 @@ jobs:
           
       - name: Build Sphinx
         run: |
-          cd docs
-          make html
+          # Build all docs using the root conf.py and index.rst
+          # This generates both zh and en content in the output
+          sphinx-build -b html docs docs/_build/html
+          
+          # Disable Jekyll for GitHub Pages
+          touch docs/_build/html/.nojekyll
           
       - name: Setup Pages
         uses: actions/configure-pages@v5
