@@ -20,8 +20,11 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 html_theme = 'sphinx_rtd_theme'
 
-# We will handle static path in sub-confs to ensure correct relative paths
-# html_static_path = ['_static'] 
+html_static_path = ['_static']
+
+html_js_files = [
+    'js/switcher.js',
+]
 
 myst_enable_extensions = [
     "colon_fence",
