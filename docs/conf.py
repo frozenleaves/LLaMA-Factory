@@ -17,7 +17,7 @@ extensions = [
 ]
 
 templates_path = ['_templates']
-exclude_patterns = []
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 # -- Options for HTML output -------------------------------------------------
 
@@ -30,3 +30,6 @@ myst_enable_extensions = [
     "deflist",
 ]
 myst_heading_anchors = 3
+
+# Support for both English and Chinese search
+html_search_language = 'en' 
