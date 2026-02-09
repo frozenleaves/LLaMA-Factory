@@ -26,6 +26,10 @@ html_js_files = [
     'js/switcher.js',
 ]
 
+html_css_files = [
+    'css/lang-switcher.css',
+]
+
 myst_enable_extensions = [
     "colon_fence",
     "deflist",

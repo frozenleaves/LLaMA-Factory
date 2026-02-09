@@ -12,15 +12,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     var select = document.createElement('select');
     select.setAttribute('aria-label', 'Language');
-    select.style.padding = '4px 8px';
-    select.style.borderRadius = '4px';
-    select.style.border = '1px solid rgba(0,0,0,0.2)';
-    select.style.backgroundColor = '#fff';
-    select.style.color = '#333';
+    select.className = 'lang-switcher__select';
 
     var optionZh = document.createElement('option');
     optionZh.value = 'zh';
-    optionZh.textContent = '简体中文';
+    optionZh.textContent = 'Simplified Chinese';
     optionZh.selected = isZh;
 
     var optionEn = document.createElement('option');
