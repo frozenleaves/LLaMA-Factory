@@ -17,7 +17,7 @@
       <script src="../../_static/doctools.js?v=9a2dae69"></script>
       <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
       <script src="../../_static/translations.js?v=beaddf03"></script>
-      <script src="../../_static/js/switcher.js?v=1bef3fb9"></script>
+      <script src="../../_static/js/switcher.js?v=f68d3056"></script>
     <script src="../../_static/js/theme.js"></script>
     <link rel="index" title="索引" href="../../genindex.html" />
     <link rel="search" title="搜索" href="../../search.html" />
@@ -274,8 +274,8 @@
 <p><code class="docutils literal notranslate"><span class="pre">DataArguments</span></code>  参数说明：</p>
 <p><code class="docutils literal notranslate"><span class="pre">dataset</span></code>: 数据集路径，支持本地或远程，当传入本地数据集文件路径时，需要满足该数据集为标准格式；否则需要传入 <code class="docutils literal notranslate"><span class="pre">dataset_info.yaml</span></code> 来配置数据集的 <code class="docutils literal notranslate"><span class="pre">converter</span></code> 等元信息，以告知 <code class="docutils literal notranslate"><span class="pre">DataEngine</span></code> 应当如何处理该数据。</p>
 <p><code class="docutils literal notranslate"><span class="pre">cutoff_len</span></code>: 数据集的截止长度，即该数据集的最大样本数量。</p>
-<hr class="docutils" />
 </section>
+<hr class="docutils" />
 <section id="id2">
 <h2>3. DataEngine 核心方法<a class="headerlink" href="#id2" title="Link to this heading"></a></h2>
 <section id="get-dataset-info">
@@ -331,9 +331,9 @@
         <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;_dataset_name&quot;</span><span class="p">:</span> <span class="n">dataset_name</span><span class="p">,</span> <span class="o">**</span><span class="n">raw_sample</span><span class="p">}</span>
 </pre></div>
 </div>
+</section>
+</section>
 <hr class="docutils" />
-</section>
-</section>
 <section id="id3">
 <h2>4. 初始化<a class="headerlink" href="#id3" title="Link to this heading"></a></h2>
 <p><code class="docutils literal notranslate"><span class="pre">DataEngine</span></code> 初始化过程只需传入一个构建好的 <code class="docutils literal notranslate"><span class="pre">DataArguments</span></code> 即可，后续可通过该 <code class="docutils literal notranslate"><span class="pre">DataEngine</span></code> 访问数据集中的数据。</p>

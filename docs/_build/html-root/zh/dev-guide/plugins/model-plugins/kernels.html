@@ -1,0 +1,335 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kernels plugins &mdash; LlamaFactory  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../../../../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../../../../_static/js/switcher.js?v=f68d3056"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../../index.html" class="icon icon-home">
+            LlamaFactory
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <!-- Local TOC -->
+              <div class="local-toc"><ul>
+<li><a class="reference internal" href="#">Kernels plugins</a><ul>
+<li><a class="reference internal" href="#id1">概览</a></li>
+<li><a class="reference internal" href="#id2">架构设计</a><ul>
+<li><a class="reference internal" href="#id3">核心组件</a><ul>
+<li><a class="reference internal" href="#registry">1. Registry（注册表）</a></li>
+<li><a class="reference internal" href="#register-kernel">2. register_kernel (装饰器)</a></li>
+<li><a class="reference internal" href="#basekernel">3. BaseKernel（基类）</a></li>
+<li><a class="reference internal" href="#id4">4. 标识系统</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#kernel-api">Kernel 系统 API 设计</a><ul>
+<li><a class="reference internal" href="#registry-kernel"><strong>Registry</strong>：全局 kernel 注册表</a></li>
+<li><a class="reference internal" href="#id5"><strong>BaseKernel</strong></a></li>
+<li><a class="reference internal" href="#scan-all-kernels"><strong>scan_all_kernels</strong></a></li>
+<li><a class="reference internal" href="#apply-kernel"><strong>apply_kernel</strong></a></li>
+<li><a class="reference internal" href="#apply-default-kernels"><strong>apply_default_kernels</strong></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#kernels">扩展 Kernels</a><ul>
+<li><a class="reference internal" href="#kernel">创建新 Kernel 的步骤</a><ul>
+<li><a class="reference internal" href="#id6">1. 创建 Kernel 实现文件</a></li>
+<li><a class="reference internal" href="#id7">2. 自动发现</a></li>
+<li><a class="reference internal" href="#id8">3. 测试 Kernel</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#id9">异常处理</a><ul>
+<li><a class="reference internal" href="#id10">依赖不可用</a></li>
+<li><a class="reference internal" href="#kernel-id">Kernel ID 未找到</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">LlamaFactory</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Kernels plugins</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../../_sources/zh/dev-guide/plugins/model-plugins/kernels.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="kernels-plugins">
+<h1>Kernels plugins<a class="headerlink" href="#kernels-plugins" title="Link to this heading"></a></h1>
+<section id="id1">
+<h2>概览<a class="headerlink" href="#id1" title="Link to this heading"></a></h2>
+<p>LLaMA-Factory 通过 Kernels plugins 系统，依据不同硬件设备提供高性能计算内核（kernel）实现。该系统通过注册表机制管理所有 kernel，通过 <code class="docutils literal notranslate"><span class="pre">&#64;register_kernel</span></code> 装饰器实现 kernel 定义后自动注册，由 <code class="docutils literal notranslate"><span class="pre">apply_kernel</span></code> 方法来使能指定的 kernel，<code class="docutils literal notranslate"><span class="pre">apply_default_kernels</span></code> 可使能注册表中当前环境所有可用的默认 kernels。</p>
+</section>
+<section id="id2">
+<h2>架构设计<a class="headerlink" href="#id2" title="Link to this heading"></a></h2>
+<section id="id3">
+<h3>核心组件<a class="headerlink" href="#id3" title="Link to this heading"></a></h3>
+<section id="registry">
+<h4>1. Registry（注册表）<a class="headerlink" href="#registry" title="Link to this heading"></a></h4>
+<p><code class="docutils literal notranslate"><span class="pre">Registry</span></code> 是一个用于管理所有 kernel 实现的静态类。它维护一个字典结构：<code class="docutils literal notranslate"><span class="pre">{kernel_id:</span> <span class="pre">KernelClass}</span></code>。</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># 注册表结构示例</span>
+<span class="p">{</span>
+    <span class="s2">&quot;npu_fused_rmsnorm&quot;</span><span class="p">:</span> <span class="n">NpuRMSNormKernel</span><span class="p">,</span>
+    <span class="s2">&quot;npu_fused_swiglu&quot;</span><span class="p">:</span> <span class="n">NpuSwiGluKernel</span><span class="p">,</span>
+    <span class="o">...</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="register-kernel">
+<h4>2. register_kernel (装饰器)<a class="headerlink" href="#register-kernel" title="Link to this heading"></a></h4>
+<p><code class="docutils literal notranslate"><span class="pre">&#64;register_kernel</span></code> 是 <code class="docutils literal notranslate"><span class="pre">Registry.register</span></code> 的别名。所有 kernel 类均应使用该装饰器进行注册。</p>
+<p><strong>注册机制</strong>：</p>
+<ul class="simple">
+<li><p>装饰器检查类是否继承自 <code class="docutils literal notranslate"><span class="pre">BaseKernel</span></code>。</p></li>
+<li><p>检查类是否定义了 <code class="docutils literal notranslate"><span class="pre">_kernel_id</span></code> 和 <code class="docutils literal notranslate"><span class="pre">_device</span></code> 属性。</p></li>
+<li><p>检查 <code class="docutils literal notranslate"><span class="pre">_device</span></code> 是否与当前运行环境的加速器类型匹配。如果不匹配，则跳过注册。</p></li>
+<li><p>如果一切符合要求，将 kernel 类注册到全局注册表中。</p></li>
+</ul>
+</section>
+<section id="basekernel">
+<h4>3. BaseKernel（基类）<a class="headerlink" href="#basekernel" title="Link to this heading"></a></h4>
+<p>所有 kernel 的实现都必须继承自 <code class="docutils literal notranslate"><span class="pre">BaseKernel</span></code> 抽象基类。<code class="docutils literal notranslate"><span class="pre">BaseKernel</span></code> 定义了 kernel 的基本属性和接口。</p>
+</section>
+<section id="id4">
+<h4>4. 标识系统<a class="headerlink" href="#id4" title="Link to this heading"></a></h4>
+<p><strong>Kernel ID</strong> (<code class="docutils literal notranslate"><span class="pre">_kernel_id</span></code>)：
+每个 kernel 必须拥有一个唯一的字符串标识符，例如 <code class="docutils literal notranslate"><span class="pre">&quot;npu_fused_rmsnorm&quot;</span></code>。</p>
+<p><strong>Device Type</strong> (<code class="docutils literal notranslate"><span class="pre">_device</span></code>)：
+kernel 必须声明其支持的设备类型，例如 <code class="docutils literal notranslate"><span class="pre">DeviceType.NPU</span></code> 或 <code class="docutils literal notranslate"><span class="pre">DeviceType.CUDA</span></code>。</p>
+</section>
+</section>
+</section>
+<section id="kernel-api">
+<h2>Kernel 系统 API 设计<a class="headerlink" href="#kernel-api" title="Link to this heading"></a></h2>
+<section id="registry-kernel">
+<h3><strong>Registry</strong>：全局 kernel 注册表<a class="headerlink" href="#registry-kernel" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">Registry</span></code> 类提供了注册和获取 kernel 的接口：</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">Registry</span><span class="p">:</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">register</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">kernel_cls</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="n">BaseKernel</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">type</span><span class="p">[</span><span class="n">BaseKernel</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;注册一个 kernel 类&quot;&quot;&quot;</span>
+        <span class="o">...</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">kernel_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">type</span><span class="p">[</span><span class="n">BaseKernel</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;根据 ID 获取 kernel 类&quot;&quot;&quot;</span>
+        <span class="o">...</span>
+</pre></div>
+</div>
+</section>
+<section id="id5">
+<h3><strong>BaseKernel</strong><a class="headerlink" href="#id5" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">BaseKernel</span></code> 定义了所有 kernel 必须实现的协议：</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">_kernel_id</span></code>: 类属性，kernel 的唯一标识符。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_device</span></code>: 类属性，kernel 支持的设备类型。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">check_deps()</span></code>: 类方法，检查 kernel 的依赖项是否满足（如 <code class="docutils literal notranslate"><span class="pre">torch_npu</span></code> 是否安装）。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">apply(**kwargs)</span></code>: 抽象类方法，实现 kernel 的具体应用逻辑。</p></li>
+</ul>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">BaseKernel</span><span class="p">(</span><span class="n">ABC</span><span class="p">):</span>
+    <span class="n">_kernel_id</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">_device</span><span class="p">:</span> <span class="n">DeviceType</span> <span class="o">=</span> <span class="n">DeviceType</span><span class="o">.</span><span class="n">CPU</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">check_deps</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;检查依赖项&quot;&quot;&quot;</span>
+        <span class="o">...</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">apply</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HFModel</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;应用 kernel 到模型&quot;&quot;&quot;</span>
+        <span class="o">...</span>
+</pre></div>
+</div>
+</section>
+<section id="scan-all-kernels">
+<h3><strong>scan_all_kernels</strong><a class="headerlink" href="#scan-all-kernels" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">scan_all_kernels</span></code> 函数会自动扫描 <code class="docutils literal notranslate"><span class="pre">ops</span></code> 目录下的所有 <code class="docutils literal notranslate"><span class="pre">.py</span></code> 文件并导入它们，从而触发 <code class="docutils literal notranslate"><span class="pre">&#64;register_kernel</span></code> 装饰器完成自动注册。</p>
+</section>
+<section id="apply-kernel">
+<h3><strong>apply_kernel</strong><a class="headerlink" href="#apply-kernel" title="Link to this heading"></a></h3>
+<p>对模型使能指定的 kernel。</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">apply_kernel</span><span class="p">(</span><span class="n">kernel_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HFModel</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;应用指定的 kernel 到模型</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        kernel_id: 目标 kernel 的 ID</span>
+<span class="sd">        **kwargs: 传递给 kernel.apply 的参数，通常包含 model</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+</pre></div>
+</div>
+<p><strong>用法示例</strong>：</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">llamafactory.v1.plugins.model_plugins.kernels</span><span class="w"> </span><span class="kn">import</span> <span class="n">apply_kernel</span>
+
+<span class="n">model</span> <span class="o">=</span> <span class="n">apply_kernel</span><span class="p">(</span><span class="s2">&quot;npu_fused_rmsnorm&quot;</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="apply-default-kernels">
+<h3><strong>apply_default_kernels</strong><a class="headerlink" href="#apply-default-kernels" title="Link to this heading"></a></h3>
+<p>对模型使能所有默认注册的 kernel。这是一个高级 API，通常在模型加载流程中自动调用。</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">apply_default_kernels</span><span class="p">(</span><span class="n">model</span><span class="p">:</span> <span class="n">HFModel</span><span class="p">,</span> <span class="n">include_kernels</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HFModel</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;应用所有默认 kernel</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        model: HFModel 实例</span>
+<span class="sd">        include_kernels: 包含的 kernel ID 列表（逗号分隔字符串），或者 &quot;auto&quot;/True 表示全部</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="kernels">
+<h2>扩展 Kernels<a class="headerlink" href="#kernels" title="Link to this heading"></a></h2>
+<p>如果用户有针对特定模型或者设备的 kernel，可以按照下述步骤去实现并接入 LLaMA-Factory。</p>
+<section id="kernel">
+<h3>创建新 Kernel 的步骤<a class="headerlink" href="#kernel" title="Link to this heading"></a></h3>
+<section id="id6">
+<h4>1. 创建 Kernel 实现文件<a class="headerlink" href="#id6" title="Link to this heading"></a></h4>
+<p>在 <code class="docutils literal notranslate"><span class="pre">src/llamafactory/v1/plugins/model_plugins/kernels/ops</span></code> 下的相应子目录中创建新的 kernel 实现文件，例如 <code class="docutils literal notranslate"><span class="pre">mlp/cuda_swiglu.py</span></code>：</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">......accelerator.helper</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeviceType</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">......utils.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">HFModel</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">...base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseKernel</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">...registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">register_kernel</span>
+
+<span class="c1"># 实现具体的 kernel 函数</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_cuda_swiglu_forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hidden_state</span><span class="p">):</span>
+    <span class="c1"># ... CUDA 优化实现 ...</span>
+    <span class="k">pass</span>
+
+<span class="nd">@register_kernel</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CudaSwiGluKernel</span><span class="p">(</span><span class="n">BaseKernel</span><span class="p">):</span>
+    <span class="n">_kernel_id</span> <span class="o">=</span> <span class="s2">&quot;cuda_fused_swiglu&quot;</span>
+    <span class="n">_device</span> <span class="o">=</span> <span class="n">DeviceType</span><span class="o">.</span><span class="n">CUDA</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">apply</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HFModel</span><span class="p">:</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;model&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">model</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;model is required&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">cls</span><span class="o">.</span><span class="n">check_deps</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Dependencies not met&quot;</span><span class="p">)</span>
+
+        <span class="c1"># 遍历模型并替换 forward 方法</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">module</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">named_modules</span><span class="p">():</span>
+            <span class="c1"># ... 匹配和替换逻辑 ...</span>
+            <span class="k">pass</span>
+
+        <span class="k">return</span> <span class="n">model</span>
+</pre></div>
+</div>
+</section>
+<section id="id7">
+<h4>2. 自动发现<a class="headerlink" href="#id7" title="Link to this heading"></a></h4>
+<p>由于 <code class="docutils literal notranslate"><span class="pre">scan_all_kernels</span></code> 会自动扫描 <code class="docutils literal notranslate"><span class="pre">ops</span></code> 目录，只要文件位于该目录下且没有语法错误，系统启动时会自动导入并注册，无需手动修改注册表代码。</p>
+</section>
+<section id="id8">
+<h4>3. 测试 Kernel<a class="headerlink" href="#id8" title="Link to this heading"></a></h4>
+<p>创建测试用例验证 kernel 的正确性：</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">llamafactory.v1.plugins.model_plugins.kernels</span><span class="w"> </span><span class="kn">import</span> <span class="n">apply_kernel</span>
+
+<span class="c1"># ... 加载模型 ...</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">apply_kernel</span><span class="p">(</span><span class="s2">&quot;cuda_fused_swiglu&quot;</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">)</span>
+<span class="c1"># ... 验证 forward 是否被替换 ...</span>
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+<section id="id9">
+<h2>异常处理<a class="headerlink" href="#id9" title="Link to this heading"></a></h2>
+<section id="id10">
+<h3>依赖不可用<a class="headerlink" href="#id10" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">BaseKernel.check_deps()</span></code> 默认会检查当前设备类型是否匹配。子类可以重写此方法以添加额外的依赖检查（如检查特定的库是否安装）。如果 <code class="docutils literal notranslate"><span class="pre">check_deps()</span></code> 返回 <code class="docutils literal notranslate"><span class="pre">False</span></code>，<code class="docutils literal notranslate"><span class="pre">apply()</span></code> 方法应当抛出异常或进行相应处理。</p>
+</section>
+<section id="kernel-id">
+<h3>Kernel ID 未找到<a class="headerlink" href="#kernel-id" title="Link to this heading"></a></h3>
+<p>如果调用 <code class="docutils literal notranslate"><span class="pre">apply_kernel</span></code> 时传入了不存在的 <code class="docutils literal notranslate"><span class="pre">kernel_id</span></code>，会抛出 <code class="docutils literal notranslate"><span class="pre">ValueError</span></code>。</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, LlamaFactory Team.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -17,7 +17,7 @@
       <script src="../../_static/doctools.js?v=9a2dae69"></script>
       <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
       <script src="../../_static/translations.js?v=beaddf03"></script>
-      <script src="../../_static/js/switcher.js?v=1bef3fb9"></script>
+      <script src="../../_static/js/switcher.js?v=f68d3056"></script>
     <script src="../../_static/js/theme.js"></script>
     <link rel="index" title="索引" href="../../genindex.html" />
     <link rel="search" title="搜索" href="../../search.html" />
@@ -76,7 +76,6 @@
 <li class="toctree-l2"><a class="reference internal" href="#npufusedswiglu">NpuFusedSwiGlu</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#npufusedrope">NpuFusedRoPE</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#npufusedmoe">NpuFusedMoE</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#id1">NpuFusedMoE</a></li>
 </ul>
 </li>
 </ul>
@@ -127,17 +126,17 @@
 <p>RMSNorm（Root Mean Square Layer Normalization）是一种常用于大模型的归一化方法。在推理或训练中，RMSNorm 融合算子 将bias、residual等操作进行融合，可以减少显存访问次数，加速计算。</p>
 <p>Ascend npu 通过 <code class="docutils literal notranslate"><span class="pre">torch_npu.npu_rms_norm</span></code> 接口提供 RMSNorm 融合算子调用接口，支持 float16, bfloat16, float 等数据格式。RMSNorm 算子常见于Qwen等LLM模型中，由于torch侧没有提供 RMSNorm 算子的接口，因此在模型中通常是以自定义类的形式出现，通过替换 RMSNorm 类的 <code class="docutils literal notranslate"><span class="pre">forward</span></code> 方法即可使能。</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">_npu_rms_forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hidden_states</span><span class="p">):</span>
-<span class="w">   </span><span class="sd">&quot;&quot;&quot;NPU forward implementation for RMSNorm.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;NPU forward implementation for RMSNorm.</span>
 
-<span class="sd">   Args:</span>
-<span class="sd">       self: RMSNorm module instance with `weight` and `variance_epsilon`.</span>
-<span class="sd">       hidden_states: Input hidden states tensor, same shape as the baseline.</span>
+<span class="sd">    Args:</span>
+<span class="sd">        self: RMSNorm module instance with `weight` and `variance_epsilon`.</span>
+<span class="sd">        hidden_states: Input hidden states tensor, same shape as the baseline.</span>
 
-<span class="sd">   Returns:</span>
-<span class="sd">       Normalized tensor consistent with the baseline RMSNorm behavior.</span>
-<span class="sd">   &quot;&quot;&quot;</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        Normalized tensor consistent with the baseline RMSNorm behavior.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
 
-   <span class="k">return</span> <span class="n">torch_npu</span><span class="o">.</span><span class="n">npu_rms_norm</span><span class="p">(</span><span class="n">hidden_states</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">,</span> <span class="n">epsilon</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">variance_epsilon</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">torch_npu</span><span class="o">.</span><span class="n">npu_rms_norm</span><span class="p">(</span><span class="n">hidden_states</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">,</span> <span class="n">epsilon</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">variance_epsilon</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
 </pre></div>
 </div>
 <p>在 LlamaFactory 中，通过 <code class="docutils literal notranslate"><span class="pre">NpuRMSNormKernel</span></code> 提供使能该融合算子的入口，只需要调用 <code class="docutils literal notranslate"><span class="pre">apply_kernel(&quot;npu_fused_rmsnorm&quot;,</span> <span class="pre">model=model)</span></code> 即可针对已适配的模型使能 npu RMSNorm 融合算子。</p>
@@ -185,9 +184,6 @@
 </section>
 <section id="npufusedmoe">
 <h2>NpuFusedMoE<a class="headerlink" href="#npufusedmoe" title="Link to this heading"></a></h2>
-</section>
-<section id="id1">
-<h2>NpuFusedMoE<a class="headerlink" href="#id1" title="Link to this heading"></a></h2>
 <p>MoE（Mixture of Experts）模型通过稀疏激活扩展容量。在原生 Transformers 实现中，使用串行循环遍历专家，导致内核启动开销大、硬件利用率低。</p>
 <p><strong>MoE 融合算子</strong> 利用 <strong>GMM（Grouped Matrix Multiplication，分组矩阵乘）</strong> 技术，支持在单个硬件指令内并行处理多组不同形状（行数不一）的矩阵乘法，消减循环开销，同时无需额外的显存复制，显著提升训练性能。</p>
 <p>Ascend npu 通过 <code class="docutils literal notranslate"><span class="pre">torch_npu.npu_grouped_matmul</span></code> 等接口提供底层支持，通过替换模型中的 MoE Block forward 方法，即可利用 NPU 的分组矩阵乘能力。</p>

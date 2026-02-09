@@ -25,7 +25,7 @@ LLaMA-Factory `v1` 采用了全新的数据处理架构，主要包含以下核�
 
 ## 基本用法
 
-#### 在训练配置文件，可以通过如下方式配置数据集：
+### 在训练配置文件，可以通过如下方式配置数据集：
 
 <details open>
 <summary>方式 1：使用 HF Hub Repo ID</summary>

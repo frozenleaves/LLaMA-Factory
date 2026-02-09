@@ -1,0 +1,199 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fused Operators &mdash; LlamaFactory  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../../../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../../../_static/js/switcher.js?v=f68d3056"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            LlamaFactory
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <!-- Local TOC -->
+              <div class="local-toc"><ul>
+<li><a class="reference internal" href="#">Fused Operators</a><ul>
+<li><a class="reference internal" href="#npufusedrmsnorm">NpuFusedRMSNorm</a></li>
+<li><a class="reference internal" href="#npufusedswiglu">NpuFusedSwiGlu</a></li>
+<li><a class="reference internal" href="#npufusedrope">NpuFusedRoPE</a></li>
+<li><a class="reference internal" href="#npufusedmoe">NpuFusedMoE</a></li>
+</ul>
+</li>
+</ul>
+</div>
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">LlamaFactory</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Fused Operators</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/zh/advanced/custom-kernels/fused-operators.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="fused-operators">
+<h1>Fused Operators<a class="headerlink" href="#fused-operators" title="Link to this heading"></a></h1>
+<p>LLaMA-Factory 提供了一系列针对特定硬件优化的融合算子。这些算子位于 <code class="docutils literal notranslate"><span class="pre">src/llamafactory/v1/plugins/model_plugins/kernels/ops</span></code> 目录下。</p>
+<p>系统启动时，<code class="docutils literal notranslate"><span class="pre">scan_all_kernels</span></code> 函数会自动扫描该目录，注册所有可用的算子。您可以通过 <code class="docutils literal notranslate"><span class="pre">apply_default_kernels(model,</span> <span class="pre">include_kernels=&quot;auto&quot;)</span></code> 一键启用它们，或者使用 <code class="docutils literal notranslate"><span class="pre">apply_kernel</span></code> 单独启用。</p>
+<p>以下是当前支持的融合算子详情：</p>
+<section id="npufusedrmsnorm">
+<h2>NpuFusedRMSNorm<a class="headerlink" href="#npufusedrmsnorm" title="Link to this heading"></a></h2>
+<p>RMSNorm（Root Mean Square Layer Normalization）是一种常用于大模型的归一化方法。在推理或训练中，RMSNorm 融合算子 将bias、residual等操作进行融合，可以减少显存访问次数，加速计算。</p>
+<p>Ascend npu 通过 <code class="docutils literal notranslate"><span class="pre">torch_npu.npu_rms_norm</span></code> 接口提供 RMSNorm 融合算子调用接口，支持 float16, bfloat16, float 等数据格式。RMSNorm 算子常见于Qwen等LLM模型中，由于torch侧没有提供 RMSNorm 算子的接口，因此在模型中通常是以自定义类的形式出现，通过替换 RMSNorm 类的 <code class="docutils literal notranslate"><span class="pre">forward</span></code> 方法即可使能。</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">_npu_rms_forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hidden_states</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;NPU forward implementation for RMSNorm.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        self: RMSNorm module instance with `weight` and `variance_epsilon`.</span>
+<span class="sd">        hidden_states: Input hidden states tensor, same shape as the baseline.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Normalized tensor consistent with the baseline RMSNorm behavior.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">return</span> <span class="n">torch_npu</span><span class="o">.</span><span class="n">npu_rms_norm</span><span class="p">(</span><span class="n">hidden_states</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">,</span> <span class="n">epsilon</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">variance_epsilon</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>在 LlamaFactory 中，通过 <code class="docutils literal notranslate"><span class="pre">NpuRMSNormKernel</span></code> 提供使能该融合算子的入口，只需要调用 <code class="docutils literal notranslate"><span class="pre">apply_kernel(&quot;npu_fused_rmsnorm&quot;,</span> <span class="pre">model=model)</span></code> 即可针对已适配的模型使能 npu RMSNorm 融合算子。</p>
+</section>
+<section id="npufusedswiglu">
+<h2>NpuFusedSwiGlu<a class="headerlink" href="#npufusedswiglu" title="Link to this heading"></a></h2>
+<p>SwiGLU（Swish-Gated Linear Unit）是一种结合了Swish激活函数和门控线性单元（GLU）的混合激活函数，其主要功能是对输入张量进行门控线性变换，近年来被广泛应用于 LLM 模型中的 MLP 层。SwiGLU 融合算子将分割、激活、矩阵乘等多个操作融合为单一硬件指令，避免多次内核启动开销。</p>
+<p>Ascend npu 通过 <code class="docutils literal notranslate"><span class="pre">torch_npu.npu_swiglu</span></code> 接口提供 SwiGLU 融合算子调用接口，支持 float16，bfloat16，float SwiGLU 算子常见于Qwen等LLM模型中，由于torch侧没有提供 SwiGLU 算子的接口，因此在模型中通常是以自定义类的形式出现，通过替换 SwiGLU 类的 <code class="docutils literal notranslate"><span class="pre">forward</span></code> 方法即可使能。替换过程可参考如下示例：</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># 原始 MLP forward 方法：</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+    <span class="n">down_proj</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">down_proj</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">act_fn</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">gate_proj</span><span class="p">(</span><span class="n">x</span><span class="p">))</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">up_proj</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">down_proj</span>
+
+<span class="c1"># 替换后的 forward 方法：</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_npu_swiglu_forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hidden_state</span><span class="p">):</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">down_proj</span><span class="p">(</span>
+        <span class="n">torch_npu</span><span class="o">.</span><span class="n">npu_swiglu</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">gate_proj</span><span class="p">(</span><span class="n">hidden_state</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">up_proj</span><span class="p">(</span><span class="n">hidden_state</span><span class="p">)),</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">),</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="p">)</span>
+</pre></div>
+</div>
+<p>在 LLaMA-Factory 中，通过 <code class="docutils literal notranslate"><span class="pre">NpuSwiGluKernel</span></code> 提供使能该融合算子的入口，只需要调用 <code class="docutils literal notranslate"><span class="pre">apply_kernel(&quot;npu_fused_swiglu&quot;,</span> <span class="pre">model=model)</span></code> 即可针对已适配的模型使能 npu SwiGLU 融合算子。对于未适配的模型，如有需要，您可根据示例以及<a class="reference internal" href="../../dev-guide/plugins/model-plugins/kernels.html"><span class="std std-doc">开发者文档</span></a>自行适配。</p>
+</section>
+<section id="npufusedrope">
+<h2>NpuFusedRoPE<a class="headerlink" href="#npufusedrope" title="Link to this heading"></a></h2>
+<p>RoPE（Rotary Positional Embedding，旋转式位置嵌入） 是一种位置编码技术，广泛应用于 Qwen 等 LLM 模型中，用于有效编码文本序列的位置信息。它结合了绝对位置编码的稳定性与相对位置编码的灵活性，同时具备优秀的长度泛化能力。传统 RoPE 算子通常在 LLM 等模型结构中通过自定义函数的形式实现。RoPE 融合算子将原计算流程合并为单个硬件优化算子，从而提升性能。</p>
+<p>Ascend npu 通过 <code class="docutils literal notranslate"><span class="pre">torch_npu.npu_rotary_mul</span></code> 提供 RoPE 融合算子调用接口，支持 float16，bfloat16，float32 等数据格式。以 Qwen3 系列模型为例，通过替换其 <code class="docutils literal notranslate"><span class="pre">apply_rotary_pos_emb</span></code> 函数即可实现 RoPE融合算子使能：</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># 原始 apply_rotary_pos_emb：</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">apply_rotary_pos_emb</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">cos</span><span class="p">,</span> <span class="n">sin</span><span class="p">,</span> <span class="n">position_ids</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">unsqueeze_dim</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+    <span class="n">cos</span> <span class="o">=</span> <span class="n">cos</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="n">unsqueeze_dim</span><span class="p">)</span>
+    <span class="n">sin</span> <span class="o">=</span> <span class="n">sin</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="n">unsqueeze_dim</span><span class="p">)</span>
+    <span class="n">q_embed</span> <span class="o">=</span> <span class="p">(</span><span class="n">q</span> <span class="o">*</span> <span class="n">cos</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="n">rotate_half</span><span class="p">(</span><span class="n">q</span><span class="p">)</span> <span class="o">*</span> <span class="n">sin</span><span class="p">)</span>
+    <span class="n">k_embed</span> <span class="o">=</span> <span class="p">(</span><span class="n">k</span> <span class="o">*</span> <span class="n">cos</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="n">rotate_half</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">*</span> <span class="n">sin</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">q_embed</span><span class="p">,</span> <span class="n">k_embed</span>
+
+<span class="c1"># 替换 RoPE 融合算子后：</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_apply_rotary_pos_emb</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">cos</span><span class="p">,</span> <span class="n">sin</span><span class="p">,</span> <span class="n">position_ids</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">unsqueeze_dim</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+    <span class="n">cos</span> <span class="o">=</span> <span class="n">cos</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="n">unsqueeze_dim</span><span class="p">)</span>
+    <span class="n">sin</span> <span class="o">=</span> <span class="n">sin</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="n">unsqueeze_dim</span><span class="p">)</span>
+    <span class="n">q_embed</span> <span class="o">=</span> <span class="n">torch_npu</span><span class="o">.</span><span class="n">npu_rotary_mul</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">cos</span><span class="p">,</span> <span class="n">sin</span><span class="p">)</span>
+    <span class="n">k_embed</span> <span class="o">=</span> <span class="n">torch_npu</span><span class="o">.</span><span class="n">npu_rotary_mul</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">cos</span><span class="p">,</span> <span class="n">sin</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">q_embed</span><span class="p">,</span> <span class="n">k_embed</span>
+</pre></div>
+</div>
+<p>在 LLaMA-Factory 中，通过 <code class="docutils literal notranslate"><span class="pre">NpuRoPEKernel</span></code> 提供使能该融合算子的入口，只需要调用 <code class="docutils literal notranslate"><span class="pre">apply_kernel(&quot;npu_fused_rope&quot;,</span> <span class="pre">model=model)</span></code> 即可针对已适配的模型使能 npu RoPE 融合算子。对于未适配的模型，如有需要，您可根据示例以及<a class="reference internal" href="../../dev-guide/plugins/model-plugins/kernels.html"><span class="std std-doc">开发者文档</span></a>自行适配。</p>
+</section>
+<section id="npufusedmoe">
+<h2>NpuFusedMoE<a class="headerlink" href="#npufusedmoe" title="Link to this heading"></a></h2>
+<p>MoE（Mixture of Experts）模型通过稀疏激活扩展容量。在原生 Transformers 实现中，使用串行循环遍历专家，导致内核启动开销大、硬件利用率低。</p>
+<p><strong>MoE 融合算子</strong> 利用 <strong>GMM（Grouped Matrix Multiplication，分组矩阵乘）</strong> 技术，支持在单个硬件指令内并行处理多组不同形状（行数不一）的矩阵乘法，消减循环开销，同时无需额外的显存复制，显著提升训练性能。</p>
+<p>Ascend npu 通过 <code class="docutils literal notranslate"><span class="pre">torch_npu.npu_grouped_matmul</span></code> 等接口提供底层支持，通过替换模型中的 MoE Block forward 方法，即可利用 NPU 的分组矩阵乘能力。</p>
+<p>核心逻辑替换如下（简化示意）：</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">_npu_moe_forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hidden_states</span><span class="p">,</span> <span class="n">routing_weights</span><span class="p">,</span> <span class="n">router_indices</span><span class="p">):</span>
+    <span class="c1"># 1. 排序：将乱序的 Token 按指派的专家归类，并生成索引映射</span>
+    <span class="n">permuted_states</span><span class="p">,</span> <span class="n">row_map</span> <span class="o">=</span> <span class="n">torch_npu</span><span class="o">.</span><span class="n">npu_moe_token_permute</span><span class="p">(</span><span class="n">hidden_states</span><span class="p">,</span> <span class="n">router_indices</span><span class="p">)</span>
+
+    <span class="c1"># 2. 统计：计算每个专家需要处理的 Token 数量</span>
+    <span class="n">tokens_per_expert</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">histc</span><span class="p">(</span><span class="n">router_indices</span><span class="p">,</span> <span class="n">bins</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">num_experts</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">num_experts</span><span class="p">)</span>
+
+    <span class="c1"># 3. 计算 (GMM)：一次性并行计算所有专家的权重，自动适配不同专家的输入长度</span>
+    <span class="n">inter_states</span> <span class="o">=</span> <span class="n">torch_npu</span><span class="o">.</span><span class="n">npu_grouped_matmul</span><span class="p">(</span><span class="n">permuted_states</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">gate_up_proj_weights</span><span class="p">,</span> <span class="n">split_sizes</span><span class="o">=</span><span class="n">tokens_per_expert</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+    <span class="n">inter_states</span> <span class="o">=</span> <span class="n">torch_npu</span><span class="o">.</span><span class="n">npu_swiglu</span><span class="p">(</span><span class="n">inter_states</span><span class="p">)</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="n">torch_npu</span><span class="o">.</span><span class="n">npu_grouped_matmul</span><span class="p">(</span><span class="n">inter_states</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">down_proj_weights</span><span class="p">,</span> <span class="n">split_sizes</span><span class="o">=</span><span class="n">tokens_per_expert</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+
+    <span class="c1"># 4. 还原：将结果恢复成原始 Token 顺序并应用路由权重</span>
+    <span class="k">return</span> <span class="n">torch_npu</span><span class="o">.</span><span class="n">npu_moe_token_unpermute</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">row_map</span><span class="p">,</span> <span class="n">routing_weights</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>在 LLaMA-Factory 中，通过 <code class="docutils literal notranslate"><span class="pre">NpuFusedMoEKernel</span></code> 提供使能该融合算子的入口。只需要调用 <code class="docutils literal notranslate"><span class="pre">apply_kernel(&quot;npu_fused_moe&quot;,</span> <span class="pre">model=model)</span></code> 即可针对已适配的模型使能 NPU MoE 融合算子。对于未适配的模型，您也可以参考上述示例代码以及<a class="reference internal" href="../../dev-guide/plugins/model-plugins/kernels.html"><span class="std std-doc">开发者文档</span></a>自行适配。</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, LlamaFactory Team.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

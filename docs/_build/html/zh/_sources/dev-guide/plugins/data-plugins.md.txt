@@ -1,6 +1,6 @@
 # Data Plugins
 
-### 1. Data Plugins 简介
+## 1. Data Plugins 简介
 
 ## DataConverterPlugin
 
@@ -24,6 +24,7 @@ Alpaca 格式是一种常见的指令微调数据格式：
   "input": "",
   "output": "Making crepes is an easy and delicious process..."
 }
+```
 
 #### 2.2 Alpaca Converter 接口定义
 

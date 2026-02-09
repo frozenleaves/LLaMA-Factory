@@ -1,0 +1,601 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Data Plugins &mdash; LlamaFactory  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../../../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../../../_static/js/switcher.js?v=f68d3056"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            LlamaFactory
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <!-- Local TOC -->
+              <div class="local-toc"><ul>
+<li><a class="reference internal" href="#">Data Plugins</a><ul>
+<li><a class="reference internal" href="#id1">1. Data Plugins 简介</a></li>
+<li><a class="reference internal" href="#dataconverterplugin">DataConverterPlugin</a><ul>
+<li><a class="reference internal" href="#id2">1. DataConverterPlugin 简介</a></li>
+<li><a class="reference internal" href="#alpaca-converter">2. Alpaca Converter 详解</a><ul>
+<li><a class="reference internal" href="#alpaca">2.1 Alpaca 格式</a></li>
+<li><a class="reference internal" href="#id3">2.2 Alpaca Converter 接口定义</a></li>
+<li><a class="reference internal" href="#id4">2.3 转换过程</a></li>
+<li><a class="reference internal" href="#id5">2.4 转换示例</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#id6">3. 自定义转换器</a><ul>
+<li><a class="reference internal" href="#id7">3.1 创建自定义转换器</a></li>
+<li><a class="reference internal" href="#id8">3.2 使用自定义转换器</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#dataloaderplugin">DataLoaderPlugin</a><ul>
+<li><a class="reference internal" href="#id9">1. DataLoaderPlugin 简介</a></li>
+<li><a class="reference internal" href="#id10">2. DataLoaderPlugin 接口定义</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#dataindexplugin">DataIndexPlugin</a><ul>
+<li><a class="reference internal" href="#id11">1. DataIndexPlugin 简介</a></li>
+<li><a class="reference internal" href="#id12">2. DataIndexPlugin 接口定义</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#dataselectorplugin">DataSelectorPlugin</a><ul>
+<li><a class="reference internal" href="#id13">1. DataSelectorPlugin 简介</a></li>
+<li><a class="reference internal" href="#id14">2. DataSelectorPlugin 接口定义</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">LlamaFactory</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Data Plugins</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/zh/dev-guide/plugins/data-plugins.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="data-plugins">
+<h1>Data Plugins<a class="headerlink" href="#data-plugins" title="Link to this heading"></a></h1>
+<section id="id1">
+<h2>1. Data Plugins 简介<a class="headerlink" href="#id1" title="Link to this heading"></a></h2>
+</section>
+<section id="dataconverterplugin">
+<h2>DataConverterPlugin<a class="headerlink" href="#dataconverterplugin" title="Link to this heading"></a></h2>
+<section id="id2">
+<h3>1. DataConverterPlugin 简介<a class="headerlink" href="#id2" title="Link to this heading"></a></h3>
+<p>DataConverter 负责将非标准格式的数据集转换为 v1 的标准 Messages 格式。这使得用户可以继续使用现有的数据集（如 Alpaca 格式），而无需手动转换。针对自定义格式的数据集，用户也可以通过构建对应的自定义 DataConverter 插件，来负责其数据格式标准化。</p>
+<p>当前，LLaMA-Factory 已内置了 <code class="docutils literal notranslate"><span class="pre">Alpaca</span> <span class="pre">Converter</span></code> 和 <code class="docutils literal notranslate"><span class="pre">Pair</span> <span class="pre">Converter</span></code>，这两类数据集可以直接使用对应的 converter 进行标准化，无需自定义转换器。</p>
+</section>
+<section id="alpaca-converter">
+<h3>2. Alpaca Converter 详解<a class="headerlink" href="#alpaca-converter" title="Link to this heading"></a></h3>
+<section id="alpaca">
+<h4>2.1 Alpaca 格式<a class="headerlink" href="#alpaca" title="Link to this heading"></a></h4>
+<p>Alpaca 格式是一种常见的指令微调数据格式：</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;system&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;You are a helpful assistant.&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;instruction&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Describe a process of making crepes.&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;input&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;output&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Making crepes is an easy and delicious process...&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="id3">
+<h4>2.2 Alpaca Converter 接口定义<a class="headerlink" href="#id3" title="Link to this heading"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">AlpacaSample</span><span class="p">(</span><span class="n">TypedDict</span><span class="p">,</span> <span class="n">total</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Alpaca 格式数据样本结构</span>
+
+<span class="sd">    attr:</span>
+<span class="sd">        system (str, 可选): 系统提示信息（system prompt），用于设定对话背景或模型行为。</span>
+<span class="sd">        instruction (str, 可选): 用户指令（user instruction），通常为任务描述。</span>
+<span class="sd">        input (str, 可选): 额外的输入内容（input text），可与 instruction 拼接。</span>
+<span class="sd">        output (str, 可选): 模型生成的目标输出（expected response）。</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="o">...</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">alpaca_converter</span><span class="p">(</span><span class="n">raw_sample</span><span class="p">:</span> <span class="n">AlpacaSample</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SFTSample</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;将 Alpaca 样本转换为 SFT（Supervised Fine-Tuning）标准样本格式</span>
+
+<span class="sd">    `alpaca_converter` 将 Alpaca 数据集中一条样本转换为通用的 `SFTSample` 格式</span>
+<span class="sd">    该格式用于监督微调（SFT）或多轮对话建模</span>
+
+<span class="sd">    转换逻辑:</span>
+<span class="sd">        - 若存在 `system` 字段，则生成一条系统消息，loss_weight = 0.0</span>
+<span class="sd">        - 若存在 `instruction` 或 `input` 字段，则合并为一条用户消息，loss_weight = 0.0</span>
+<span class="sd">        - 若存在 `output` 字段，则生成一条助手机器人回复消息，loss_weight = 1.0</span>
+
+<span class="sd">    args:</span>
+<span class="sd">        raw_sample (AlpacaSample): 原始 Alpaca 数据样本</span>
+
+<span class="sd">    return:</span>
+<span class="sd">        SFTSample: 转换后的标准化样本，格式如下:</span>
+
+<span class="sd">            {</span>
+<span class="sd">                &quot;messages&quot;: [</span>
+<span class="sd">                    {&quot;role&quot;: &quot;system&quot;, &quot;content&quot;: [{&quot;type&quot;: &quot;text&quot;, &quot;value&quot;: &quot;...&quot;}], &quot;loss_weight&quot;: 0.0},</span>
+<span class="sd">                    {&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: [{&quot;type&quot;: &quot;text&quot;, &quot;value&quot;: &quot;...&quot;}], &quot;loss_weight&quot;: 0.0},</span>
+<span class="sd">                    {&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: [{&quot;type&quot;: &quot;text&quot;, &quot;value&quot;: &quot;...&quot;}], &quot;loss_weight&quot;: 1.0},</span>
+<span class="sd">                ]</span>
+<span class="sd">            }</span>
+
+<span class="sd">    example:</span>
+<span class="sd">        &gt;&gt;&gt; raw = {&quot;instruction&quot;: &quot;请将以下句子翻译成英文：&quot;, &quot;input&quot;: &quot;你好&quot;, &quot;output&quot;: &quot;Hello&quot;}</span>
+<span class="sd">        &gt;&gt;&gt; alpaca_converter(raw)</span>
+<span class="sd">        {</span>
+<span class="sd">            &quot;messages&quot;: [</span>
+<span class="sd">                {&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: [{&quot;type&quot;: &quot;text&quot;, &quot;value&quot;: &quot;请将以下句子翻译成英文：你好&quot;}], &quot;loss_weight&quot;: 0.0},</span>
+<span class="sd">                {&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: [{&quot;type&quot;: &quot;text&quot;, &quot;value&quot;: &quot;Hello&quot;}], &quot;loss_weight&quot;: 1.0}</span>
+<span class="sd">            ]</span>
+<span class="sd">        }</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+</pre></div>
+</div>
+</section>
+<section id="id4">
+<h4>2.3 转换过程<a class="headerlink" href="#id4" title="Link to this heading"></a></h4>
+<p><code class="docutils literal notranslate"><span class="pre">alpaca_converter</span></code> 函数将 Alpaca 格式转换为标准格式，转换逻辑如下：</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">alpaca_converter</span><span class="p">(</span><span class="n">raw_sample</span><span class="p">:</span> <span class="n">AlpacaSample</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SFTSample</span><span class="p">:</span>
+    <span class="n">messages</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="c1"># 1. 添加系统提示词（如果存在）</span>
+    <span class="k">if</span> <span class="s2">&quot;system&quot;</span> <span class="ow">in</span> <span class="n">raw_sample</span><span class="p">:</span>
+        <span class="n">messages</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+            <span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;system&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="p">[{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;text&quot;</span><span class="p">,</span> <span class="s2">&quot;value&quot;</span><span class="p">:</span> <span class="n">raw_sample</span><span class="p">[</span><span class="s2">&quot;system&quot;</span><span class="p">]}],</span>
+            <span class="s2">&quot;loss_weight&quot;</span><span class="p">:</span> <span class="mf">0.0</span>
+        <span class="p">})</span>
+
+    <span class="c1"># 2. 添加用户输入（instruction + input）</span>
+    <span class="k">if</span> <span class="s2">&quot;instruction&quot;</span> <span class="ow">in</span> <span class="n">raw_sample</span> <span class="ow">or</span> <span class="s2">&quot;input&quot;</span> <span class="ow">in</span> <span class="n">raw_sample</span><span class="p">:</span>
+        <span class="n">user_content</span> <span class="o">=</span> <span class="n">raw_sample</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;instruction&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">+</span> <span class="n">raw_sample</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;input&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">messages</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+            <span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="p">[{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;text&quot;</span><span class="p">,</span> <span class="s2">&quot;value&quot;</span><span class="p">:</span> <span class="n">user_content</span><span class="p">}],</span>
+            <span class="s2">&quot;loss_weight&quot;</span><span class="p">:</span> <span class="mf">0.0</span>
+        <span class="p">})</span>
+
+    <span class="c1"># 3. 添加模型回复</span>
+    <span class="k">if</span> <span class="s2">&quot;output&quot;</span> <span class="ow">in</span> <span class="n">raw_sample</span><span class="p">:</span>
+        <span class="n">messages</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+            <span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;assistant&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="p">[{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;text&quot;</span><span class="p">,</span> <span class="s2">&quot;value&quot;</span><span class="p">:</span> <span class="n">raw_sample</span><span class="p">[</span><span class="s2">&quot;output&quot;</span><span class="p">]}],</span>
+            <span class="s2">&quot;loss_weight&quot;</span><span class="p">:</span> <span class="mf">1.0</span>
+        <span class="p">})</span>
+
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;messages&quot;</span><span class="p">:</span> <span class="n">messages</span><span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="id5">
+<h4>2.4 转换示例<a class="headerlink" href="#id5" title="Link to this heading"></a></h4>
+<p><strong>输入（Alpaca 格式）：</strong></p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;instruction&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;What is the capital of France?&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;input&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;output&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;The capital of France is Paris.&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p><strong>输出（标准格式）：</strong></p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;messages&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;role&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;user&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;text&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;What is the capital of France?&quot;</span><span class="p">}],</span>
+<span class="w">      </span><span class="nt">&quot;loss_weight&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.0</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;role&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;assistant&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;text&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;The capital of France is Paris.&quot;</span><span class="p">}],</span>
+<span class="w">      </span><span class="nt">&quot;loss_weight&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1.0</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="id6">
+<h3>3. 自定义转换器<a class="headerlink" href="#id6" title="Link to this heading"></a></h3>
+<section id="id7">
+<h4>3.1 创建自定义转换器<a class="headerlink" href="#id7" title="Link to this heading"></a></h4>
+<p>如果用户有自己的数据格式，可以轻松添加自定义转换器将其标准化，实现过程可参考如下示例：</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># src/llamafactory/v1/plugins/data_plugins/converter.py</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TypedDict</span><span class="p">,</span> <span class="n">NotRequired</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">...extras.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">SFTSample</span>
+
+<span class="c1"># 1. 定义输入格式的类型</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MyCustomSample</span><span class="p">(</span><span class="n">TypedDict</span><span class="p">,</span> <span class="n">total</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+    <span class="n">question</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">answer</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">context</span><span class="p">:</span> <span class="n">NotRequired</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+
+<span class="c1"># 2. 实现转换逻辑</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">custom_converter</span><span class="p">(</span><span class="n">raw_sample</span><span class="p">:</span> <span class="n">MyCustomSample</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SFTSample</span><span class="p">:</span>
+    <span class="n">messages</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="c1"># 构建用户消息</span>
+    <span class="n">user_text</span> <span class="o">=</span> <span class="n">raw_sample</span><span class="p">[</span><span class="s2">&quot;question&quot;</span><span class="p">]</span>
+    <span class="k">if</span> <span class="s2">&quot;context&quot;</span> <span class="ow">in</span> <span class="n">raw_sample</span><span class="p">:</span>
+        <span class="n">user_text</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Context: </span><span class="si">{</span><span class="n">raw_sample</span><span class="p">[</span><span class="s1">&#39;context&#39;</span><span class="p">]</span><span class="si">}</span><span class="se">\n\n</span><span class="s2">Question: </span><span class="si">{</span><span class="n">user_text</span><span class="si">}</span><span class="s2">&quot;</span>
+
+    <span class="n">messages</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+        <span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="p">[{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;text&quot;</span><span class="p">,</span> <span class="s2">&quot;value&quot;</span><span class="p">:</span> <span class="n">user_text</span><span class="p">}],</span>
+        <span class="s2">&quot;loss_weight&quot;</span><span class="p">:</span> <span class="mf">0.0</span>
+    <span class="p">})</span>
+
+    <span class="c1"># 构建助手消息</span>
+    <span class="n">messages</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+        <span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;assistant&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="p">[{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;text&quot;</span><span class="p">,</span> <span class="s2">&quot;value&quot;</span><span class="p">:</span> <span class="n">raw_sample</span><span class="p">[</span><span class="s2">&quot;answer&quot;</span><span class="p">]}],</span>
+        <span class="s2">&quot;loss_weight&quot;</span><span class="p">:</span> <span class="mf">1.0</span>
+    <span class="p">})</span>
+
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;messages&quot;</span><span class="p">:</span> <span class="n">messages</span><span class="p">}</span>
+
+<span class="c1"># 3. 注册 custom_converter</span>
+<span class="c1">#src/llamafactory/v1/plugins/data_plugins/converter.py: CONVERTERS</span>
+<span class="n">CONVERTERS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;alpaca&quot;</span><span class="p">:</span> <span class="n">alpaca_converter</span><span class="p">,</span>
+    <span class="s2">&quot;custom&quot;</span><span class="p">:</span> <span class="n">custom_converter</span><span class="p">,</span>  <span class="c1"># 添加自定义转换器</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="id8">
+<h4>3.2 使用自定义转换器<a class="headerlink" href="#id8" title="Link to this heading"></a></h4>
+<p>在 YAML 配置中指定转换器名称：</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">my_dataset</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">file_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">custom_data.json</span>
+<span class="w">  </span><span class="nt">converter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">custom</span>
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+<hr class="docutils" />
+<section id="dataloaderplugin">
+<h2>DataLoaderPlugin<a class="headerlink" href="#dataloaderplugin" title="Link to this heading"></a></h2>
+<section id="id9">
+<h3>1. DataLoaderPlugin 简介<a class="headerlink" href="#id9" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">DataLoaderPlugin</span></code> 负责从本地文件加载数据集，当前支持如下文件格式：</p>
+<ul class="simple">
+<li><p><strong>JSON</strong>: <code class="docutils literal notranslate"><span class="pre">.json</span></code></p></li>
+<li><p><strong>JSONL</strong>: <code class="docutils literal notranslate"><span class="pre">.jsonl</span></code></p></li>
+<li><p><strong>CSV</strong>: <code class="docutils literal notranslate"><span class="pre">.csv</span></code></p></li>
+<li><p><strong>Parquet</strong>: <code class="docutils literal notranslate"><span class="pre">.parquet</span></code></p></li>
+<li><p><strong>Arrow</strong>: <code class="docutils literal notranslate"><span class="pre">.arrow</span></code></p></li>
+<li><p><strong>Text</strong>: <code class="docutils literal notranslate"><span class="pre">.txt</span></code></p></li>
+</ul>
+</section>
+<section id="id10">
+<h3>2. DataLoaderPlugin 接口定义<a class="headerlink" href="#id10" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">DataLoaderPlugin</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;数据加载插件（DataLoaderPlugin）</span>
+
+<span class="sd">    负责根据数据集信息（`DatasetInfo`）自动加载本地或远程数据集。  </span>
+<span class="sd">    支持多种文件格式（如 CSV、JSON、Parquet、Text、Arrow），并可选择是否以流式方式加载。</span>
+
+<span class="sd">    通常由 `DataEngine` 调用，用于统一封装数据加载逻辑。</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">args</span><span class="p">:</span> <span class="n">DataArguments</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;数据参数对象，包含数据目录、缓存路径、分片等配置信息。&quot;&quot;&quot;</span>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_builder_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;arrow&quot;</span><span class="p">,</span> <span class="s2">&quot;csv&quot;</span><span class="p">,</span> <span class="s2">&quot;json&quot;</span><span class="p">,</span> <span class="s2">&quot;parquet&quot;</span><span class="p">,</span> <span class="s2">&quot;text&quot;</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;获取数据集文件格式</span>
+
+<span class="sd">        根据输入文件路径自动判断应使用的 HuggingFace `load_dataset` 构建器类型。</span>
+<span class="sd">        通过文件扩展名推断数据类型，例如 `.csv`、`.jsonl`、`.parquet`、`.txt` 等。</span>
+
+<span class="sd">        args:</span>
+<span class="sd">            path (str): 数据集文件路径，用于识别文件类型。</span>
+
+<span class="sd">        return:</span>
+<span class="sd">            Literal[&quot;arrow&quot;, &quot;csv&quot;, &quot;json&quot;, &quot;parquet&quot;, &quot;text&quot;]:</span>
+<span class="sd">                数据构建器名称，用于 `datasets.load_dataset()`。</span>
+
+<span class="sd">        example:</span>
+<span class="sd">            &gt;&gt;&gt; _get_builder_name(&quot;data/train.jsonl&quot;)</span>
+<span class="sd">            &quot;json&quot;</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="o">...</span>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">auto_load_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dataset_info</span><span class="p">:</span> <span class="n">DatasetInfo</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HFDataset</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;根据传入的 `dataset_info` 自动选择合适的加载方式</span>
+
+<span class="sd">        args:</span>
+<span class="sd">            dataset_info (DatasetInfo): 数据集元信息，通常包含：</span>
+<span class="sd">                - `file_name`: 数据文件路径</span>
+<span class="sd">                - `split`: 数据划分（如 &quot;train&quot;、&quot;test&quot;）；</span>
+<span class="sd">                - `streaming`: 是否启用流式加载</span>
+
+<span class="sd">        return:</span>
+<span class="sd">            HFDataset: 加载完成的 Hugging Face 数据集对象。</span>
+
+<span class="sd">        example:</span>
+<span class="sd">            &gt;&gt;&gt; plugin = DataLoaderPlugin(args)</span>
+<span class="sd">            &gt;&gt;&gt; ds = plugin.auto_load_data({&quot;file_name&quot;: &quot;~/data.json&quot;, &quot;split&quot;: &quot;train&quot;})</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="o">...</span>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">load_data_from_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">split</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">streaming</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HFDataset</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;从文件或目录加载数据集</span>
+
+<span class="sd">        根据输入路径自动识别文件类型（CSV、JSON、Parquet、Text 等），  </span>
+<span class="sd">        并通过 `datasets.load_dataset()` 加载数据集。  </span>
+<span class="sd">        若 `streaming=True`，则将结果转换为迭代式数据集。</span>
+
+<span class="sd">        args:</span>
+<span class="sd">            filepath (str): 文件路径或目录路径。</span>
+<span class="sd">            split (str): 数据划分名称（如 &quot;train&quot;、&quot;validation&quot;）。</span>
+<span class="sd">            streaming (bool): 是否启用流式加载模式。</span>
+
+<span class="sd">        return:</span>
+<span class="sd">            HFDataset: 加载后的数据集对象。</span>
+
+<span class="sd">        example:</span>
+<span class="sd">            &gt;&gt;&gt; plugin.load_data_from_file(&quot;data/train.json&quot;, &quot;train&quot;, False)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="o">...</span>
+
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="dataindexplugin">
+<h2>DataIndexPlugin<a class="headerlink" href="#dataindexplugin" title="Link to this heading"></a></h2>
+<section id="id11">
+<h3>1. DataIndexPlugin 简介<a class="headerlink" href="#id11" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">DataIndexPlugin</span></code> 负责调整数据索引，支持通过配置 <code class="docutils literal notranslate"><span class="pre">size</span></code>, <code class="docutils literal notranslate"><span class="pre">weight</span></code> 等参数控制数据集样本数量和采样频率。</p>
+<ul class="simple">
+<li><p>使用 <code class="docutils literal notranslate"><span class="pre">size</span></code> 参数 限制使用的样本数量：</p></li>
+</ul>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">my_dataset</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">file_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">large_dataset.json</span>
+<span class="w">  </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000</span><span class="w">  </span><span class="c1"># 只使用前 1000 个样本</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>使用 <code class="docutils literal notranslate"><span class="pre">weight</span></code> 参数调整数据集在混合数据中的采样频率：</p></li>
+</ul>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">dataset_a</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">file_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">data_a.json</span>
+<span class="w">  </span><span class="nt">weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span>
+
+<span class="nt">dataset_b</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">file_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">data_b.json</span>
+<span class="w">  </span><span class="nt">weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2.0</span><span class="w">  </span><span class="c1"># dataset_b 的样本出现频率是 dataset_a 的 2 倍</span>
+</pre></div>
+</div>
+<p><strong>说明</strong>：<code class="docutils literal notranslate"><span class="pre">weight</span></code> 参数适用于在多个数据集混合训练时，调整不同数据集的的采样频率</p>
+<ul class="simple">
+<li><p>当 <code class="docutils literal notranslate"><span class="pre">weight=1.0</span></code> 时，数据集按原始比例采样</p></li>
+<li><p>当 <code class="docutils literal notranslate"><span class="pre">weight=2.0</span></code> 时，该数据集的索引会复制 2 倍，使其样本出现频率翻倍</p></li>
+</ul>
+</section>
+<section id="id12">
+<h3>2. DataIndexPlugin 接口定义<a class="headerlink" href="#id12" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">DataIndexPlugin</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;数据索引插件（DataIndexPlugin）</span>
+
+<span class="sd">    根据 `size` 和 `weight` 调整数据索引列表，控制数据集的样本数量和采样频率  </span>
+<span class="sd">    通常在多数据集混合训练时使用，以控制不同数据集在总体样本中的占比。</span>
+
+<span class="sd">    在 `DataEngine.build_data_index` 中被自动调用，用于实现样本重采样或加权分布。</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">adjust_data_index</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">data_index</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]],</span> <span class="n">size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">weight</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;调整数据索引列表</span>
+
+<span class="sd">        根据 `size` 或 `weight` 参数对输入的数据索引进行采样、扩展或缩减。  </span>
+<span class="sd">        若两个参数同时存在，将依次执行基于大小和基于权重的调整。</span>
+
+<span class="sd">        args:</span>
+<span class="sd">            data_index (list[tuple[str, int]]):  </span>
+<span class="sd">                数据索引列表，每个元素为 `(dataset_name, sample_index)`。  </span>
+<span class="sd">            size (Optional[int]):  </span>
+<span class="sd">                目标样本数量，若指定则根据该数量裁剪或重复样本。  </span>
+<span class="sd">            weight (Optional[float]):  </span>
+<span class="sd">                数据集权重，用于控制数据集在混合训练中的采样比例。</span>
+
+<span class="sd">        return:</span>
+<span class="sd">            list[tuple[str, int]]:  </span>
+<span class="sd">                调整后的数据索引列表。</span>
+
+<span class="sd">        example:</span>
+<span class="sd">            &gt;&gt;&gt; plugin = DataIndexPlugin()</span>
+<span class="sd">            &gt;&gt;&gt; adjusted = plugin.adjust_data_index([(&quot;ds1&quot;, i) for i in range(100)], size=50, weight=None)</span>
+<span class="sd">            &gt;&gt;&gt; len(adjusted)</span>
+<span class="sd">            50</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="o">...</span>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">adjust_by_size</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data_index</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]],</span> <span class="n">size</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;根据目标大小调整数据索引</span>
+
+<span class="sd">        通过裁剪或重复样本，使索引总数等于 `size`。  </span>
+<span class="sd">        常用于统一不同数据集的样本数量。</span>
+
+<span class="sd">        args:</span>
+<span class="sd">            data_index (list[tuple[str, int]]):  </span>
+<span class="sd">                原始数据索引列表。  </span>
+<span class="sd">            size (int):  </span>
+<span class="sd">                目标样本数量。</span>
+
+<span class="sd">        return:</span>
+<span class="sd">            list[tuple[str, int]]:  </span>
+<span class="sd">                调整后长度等于 `size` 的数据索引列表。</span>
+
+<span class="sd">        example:</span>
+<span class="sd">            &gt;&gt;&gt; plugin.adjust_by_size([(&quot;ds1&quot;, i) for i in range(10)], 20)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="o">...</span>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">adjust_by_weight</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data_index</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]],</span> <span class="n">weight</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;根据权重调整数据索引</span>
+
+<span class="sd">        通过加权采样或重复样本，使数据集样本出现频率符合指定权重。  </span>
+<span class="sd">        常用于多数据源训练中按比例平衡样本。</span>
+
+<span class="sd">        args:</span>
+<span class="sd">            data_index (list[tuple[str, int]]):  </span>
+<span class="sd">                原始数据索引列表。  </span>
+<span class="sd">            weight (float):  </span>
+<span class="sd">                数据集权重（相对比例，可与其他数据集共同归一化）。</span>
+
+<span class="sd">        return:</span>
+<span class="sd">            list[tuple[str, int]]:  </span>
+<span class="sd">                调整后的加权数据索引列表。</span>
+
+<span class="sd">        example:</span>
+<span class="sd">            &gt;&gt;&gt; plugin.adjust_by_weight([(&quot;ds1&quot;, i) for i in range(10)], 0.5)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="o">...</span>
+
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="dataselectorplugin">
+<h2>DataSelectorPlugin<a class="headerlink" href="#dataselectorplugin" title="Link to this heading"></a></h2>
+<section id="id13">
+<h3>1. DataSelectorPlugin 简介<a class="headerlink" href="#id13" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">DataSelectorPlugin</span></code> 为 <code class="docutils literal notranslate"><span class="pre">DataEngine</span></code>提供基于索引访问数据的功能，由 <code class="docutils literal notranslate"><span class="pre">DataEngine</span></code> 的 <code class="docutils literal notranslate"><span class="pre">__getitem__</span></code> 方法自动调用。</p>
+</section>
+<section id="id14">
+<h3>2. DataSelectorPlugin 接口定义<a class="headerlink" href="#id14" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">DataSelectorPlugin</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;根据索引选择数据集样本。</span>
+
+<span class="sd">    配合 `DataEngine` 使用，通过统一的 `data_index` 结构（包含数据集名与样本索引）来实现灵活的数据选择</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">data_index</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;数据索引列表，每个元素为 (dataset_name, sample_index)。&quot;&quot;&quot;</span>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">select</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">slice</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]]:</span>
+        <span class="s2">&quot;&quot;&quot;选择数据集样本</span>
+
+<span class="s2">        根据输入类型从 `data_index` 中选择对应的样本索引  </span>
+<span class="s2">        支持三种索引方式：</span>
+<span class="s2">            - 切片（slice）：返回对应范围内的样本</span>
+<span class="s2">            - 索引列表（list[int]）：返回指定索引处的多个样本</span>
+<span class="s2">            - 其他类型输入将触发异常。</span>
+
+<span class="s2">        args:</span>
+<span class="s2">            index (Union[slice, list[int], Any]): 数据样本索引</span>
+<span class="s2">                可以是切片（`slice`）或索引列表</span>
+
+<span class="s2">        return:</span>
+<span class="s2">            Union[tuple[str, int], list[tuple[str, int]]]:</span>
+<span class="s2">                - 若为单个索引：返回一个 `(dataset_name, sample_index)`</span>
+<span class="s2">                - 若为多个索引或切片：返回多个样本的列表</span>
+
+<span class="s2">        except:</span>
+<span class="s2">        Raises:</span>
+<span class="s2">            ValueError: 当输入索引类型不受支持时抛出。</span>
+<span class="s2">        ...</span>
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, LlamaFactory Team.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
