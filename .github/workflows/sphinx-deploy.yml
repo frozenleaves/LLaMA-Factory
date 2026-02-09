@@ -31,8 +31,15 @@ jobs:
           
       - name: Build Sphinx
         run: |
-          # Build all docs starting from docs/index.rst
-          sphinx-build -b html docs docs/_build/html
+          # Build Chinese documentation (source: docs/zh, output: docs/_build/html/zh)
+          # We point directly to docs/zh where the conf.py for zh lives
+          sphinx-build -b html docs/zh docs/_build/html/zh
+          
+          # Build English documentation (source: docs/en, output: docs/_build/html/en)
+          sphinx-build -b html docs/en docs/_build/html/en
+          
+          # Create root redirect
+          echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=zh/index.html"><script>window.location.href="zh/index.html"</script></head><body>Redirecting...</body></html>' > docs/_build/html/index.html
           
           # Disable Jekyll for GitHub Pages
           touch docs/_build/html/.nojekyll
