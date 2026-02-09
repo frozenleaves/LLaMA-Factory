@@ -5,7 +5,6 @@ Table of Contents
    :maxdepth: 1
    :caption: Getting Started
 
-   intro
    getting-started
    installation
    llamaboard-web-ui
