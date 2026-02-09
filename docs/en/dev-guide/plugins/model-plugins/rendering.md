@@ -1,3 +1,3 @@
-# Waiting for update
+# Rendering
 
-This document is waiting for update.
+This page is not yet available in English. Use the language switcher to view Simplified Chinese.
