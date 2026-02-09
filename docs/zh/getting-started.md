@@ -1,7 +1,5 @@
 # Getting Started
 
-----
-
 
 ## 训练方法
 

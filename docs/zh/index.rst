@@ -39,7 +39,6 @@ Table of Contents
    advanced/distributed/parallel-dp-tp-ep-sp-cp
    advanced/custom-kernels/triton
    advanced/custom-kernels/fused-operators
-   advanced/custom-kernels/moe
 
 .. toctree::
    :maxdepth: 1

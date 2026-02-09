@@ -6,67 +6,75 @@ document.addEventListener("DOMContentLoaded", function() {
     var isZh = path.indexOf('/zh/') !== -1;
     var isEn = path.indexOf('/en/') !== -1;
     
+    // If not in either, do nothing (or maybe we are at root)
     if (!isZh && !isEn) return;
     
     var currentLang = isZh ? 'zh' : 'en';
-    var targetLang = isZh ? 'en' : 'zh';
-    var targetLabel = isZh ? 'English' : '简体中文';
     
-    // Create the button
-    var btn = document.createElement('a');
-    btn.className = 'lang-switcher-btn';
-    btn.textContent = targetLabel;
+    // Create the select container
+    var container = document.createElement('div');
+    container.className = 'lang-switcher-container';
+    container.style.padding = '10px';
+    container.style.textAlign = 'center';
     
-    // Calculate target URL
-    // Replace the first occurrence of /zh/ or /en/
-    var targetUrl = path.replace('/' + currentLang + '/', '/' + targetLang + '/');
-    btn.href = targetUrl;
+    // Create label
+    var label = document.createElement('label');
+    label.textContent = 'Language: ';
+    label.style.color = '#ccc';
+    label.style.marginRight = '5px';
+    label.style.fontSize = '0.9em';
     
-    // Style the button
-    btn.style.position = 'fixed';
-    btn.style.bottom = '20px';
-    btn.style.right = '20px';
-    btn.style.zIndex = '9999';
-    btn.style.padding = '8px 16px';
-    btn.style.backgroundColor = '#2980b9'; // Sphinx blue
-    btn.style.color = 'white';
-    btn.style.borderRadius = '4px';
-    btn.style.textDecoration = 'none';
-    btn.style.fontWeight = 'bold';
-    btn.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
-    btn.style.cursor = 'pointer';
+    // Create select element
+    var select = document.createElement('select');
+    select.className = 'lang-switcher-select';
+    select.style.padding = '5px';
+    select.style.borderRadius = '4px';
+    select.style.border = '1px solid #ccc';
+    select.style.backgroundColor = '#fcfcfc';
+    select.style.color = '#333';
+    select.style.cursor = 'pointer';
     
-    // Add hover effect via JS since we are using inline styles
-    btn.onmouseover = function() {
-        this.style.backgroundColor = '#3091d1';
-    };
-    btn.onmouseout = function() {
-        this.style.backgroundColor = '#2980b9';
-    };
+    // Options
+    var optionZh = document.createElement('option');
+    optionZh.value = 'zh';
+    optionZh.textContent = '简体中文';
+    optionZh.selected = isZh;
     
-    // Add to body
-    document.body.appendChild(btn);
+    var optionEn = document.createElement('option');
+    optionEn.value = 'en';
+    optionEn.textContent = 'English';
+    optionEn.selected = isEn;
     
-    // Also try to add to the side nav if available (sphinx_rtd_theme)
+    select.appendChild(optionZh);
+    select.appendChild(optionEn);
+    
+    // Event listener
+    select.addEventListener('change', function() {
+        var newLang = this.value;
+        if (newLang === currentLang) return;
+        
+        var targetUrl = path.replace('/' + currentLang + '/', '/' + newLang + '/');
+        window.location.href = targetUrl;
+    });
+    
+    container.appendChild(label);
+    container.appendChild(select);
+    
+    // Inject into the sidebar
     var nav = document.querySelector('.wy-side-nav-search');
     if (nav) {
-        var navBtn = btn.cloneNode(true);
-        // Reset fixed positioning for nav button
-        navBtn.style.position = 'static';
-        navBtn.style.display = 'inline-block';
-        navBtn.style.marginTop = '10px';
-        navBtn.style.marginBottom = '10px';
-        navBtn.style.marginRight = '0';
-        navBtn.style.boxShadow = 'none';
-        navBtn.style.background = 'rgba(255,255,255,0.2)';
-        navBtn.onmouseover = function() { this.style.background = 'rgba(255,255,255,0.3)'; };
-        navBtn.onmouseout = function() { this.style.background = 'rgba(255,255,255,0.2)'; };
+        // Insert after the search box or title
+        nav.appendChild(container);
+    } else {
+        // Fallback: Fixed position
+        container.style.position = 'fixed';
+        container.style.bottom = '20px';
+        container.style.right = '20px';
+        container.style.backgroundColor = '#2980b9';
+        container.style.borderRadius = '5px';
+        container.style.zIndex = '9999';
         
-        nav.appendChild(navBtn);
-        
-        // If we added to nav, maybe we don't need the floating one?
-        // Let's keep both or decide. Floating is safer if theme changes.
-        // But for RTD theme, Nav is better. Let's hide floating if nav exists.
-        btn.style.display = 'none';
+        label.style.color = 'white';
+        document.body.appendChild(container);
     }
 });
