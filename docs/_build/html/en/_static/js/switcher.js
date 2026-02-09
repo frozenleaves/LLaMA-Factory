@@ -74,19 +74,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  var topRight = buildSwitcher();
-  topRight.style.position = 'fixed';
-  topRight.style.top = '12px';
-  topRight.style.right = '12px';
-  topRight.style.zIndex = '9999';
-
-  var topContainer = document.querySelector('.wy-nav-content');
-  if (topContainer) {
-    document.body.appendChild(topRight);
-  } else {
-    document.body.appendChild(topRight);
-  }
-
   var side = document.querySelector('.wy-side-nav-search');
   if (side) {
     var sideSwitcher = buildSwitcher();
@@ -94,6 +81,13 @@ document.addEventListener('DOMContentLoaded', function () {
     sideSwitcher.style.display = 'flex';
     sideSwitcher.style.justifyContent = 'center';
     side.appendChild(sideSwitcher);
+  } else {
+    var topRight = buildSwitcher();
+    topRight.style.position = 'fixed';
+    topRight.style.top = '12px';
+    topRight.style.right = '12px';
+    topRight.style.zIndex = '9999';
+    document.body.appendChild(topRight);
   }
 
   hideOtherLanguageToc();

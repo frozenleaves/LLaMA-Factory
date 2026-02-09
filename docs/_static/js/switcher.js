@@ -91,4 +91,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   hideOtherLanguageToc();
+  window.addEventListener('load', hideOtherLanguageToc);
+  setTimeout(hideOtherLanguageToc, 50);
+  setTimeout(hideOtherLanguageToc, 300);
 });
