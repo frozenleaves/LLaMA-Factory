@@ -16,7 +16,7 @@ dist_config:
 train_dataset: data/v1_sft_demo.yaml 
 
 ### training
-output_dir: outputs/Qwen3-30B-A3B-deepspeed
+output_dir: outputs/Qwen3-0.6B-deepspeed
 micro_batch_size: 1
 cutoff_len: 2048
 learning_rate: 1.0e-4
