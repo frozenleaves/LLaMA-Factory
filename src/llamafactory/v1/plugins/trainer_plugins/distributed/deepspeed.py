@@ -117,7 +117,7 @@ class AccelerateDeepSpeedEngine:
 
         if self.accelerator.is_main_process:
             unwrapped_model.save_pretrained(output_dir, state_dict=state_dict, max_shard_size="4GB")
-            trainer.renderer.processor.save_pretrained(output_dir)
+            trainer.renderer.processor.save_pretrained(output_dir, max_shard_size="4GB")
 
         self.accelerator.wait_for_everyone()
         logger.info_rank0(f"Model saved to {output_dir}")
