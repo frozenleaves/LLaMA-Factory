@@ -1,4 +1,4 @@
-model: /home/frozen/models/Qwen3-0.6B
+model: Qwen/Qwen3-0.6B
 
 model_class: llm
 
