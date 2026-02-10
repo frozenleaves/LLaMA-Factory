@@ -38,43 +38,11 @@ def save_model_fsdp2(trainer) -> None:
 
 @DistributedPlugin("deepspeed").register()
 def shard_model_deepspeed(model: HFModel, dist_config: PluginConfig, **kwargs) -> HFModel:
-    from .deepspeed import DeepSpeedEngine
+    from .deepspeed import AccelerateDeepSpeedEngine
 
-    return DeepSpeedEngine(dist_config, batch_config=kwargs.get("batch_config")).shard_model(
-        model, optimizer=kwargs.get("optimizer")
-    )
+    return AccelerateDeepSpeedEngine(
+        dist_config,
+        num_micro_batch=kwargs.get("num_micro_batch"),
+        micro_batch_size=kwargs.get("micro_batch_size"),
+    ).shard_model(model)
 
-
-@DistributedPlugin("deepspeed").register("post_shard")
-def post_shard_deepspeed(trainer) -> None:
-    from .deepspeed import post_shard
-
-    return post_shard(trainer)
-
-
-@DistributedPlugin("deepspeed").register("init_lr_scheduler")
-def init_lr_scheduler_deepspeed(trainer):
-    from .deepspeed import init_lr_scheduler
-
-    return init_lr_scheduler(trainer)
-
-
-@DistributedPlugin("deepspeed").register("backward")
-def backward_deepspeed(trainer, loss) -> None:
-    from .deepspeed import backward
-
-    return backward(trainer, loss)
-
-
-@DistributedPlugin("deepspeed").register("opt_step")
-def opt_step_deepspeed(trainer) -> float:
-    from .deepspeed import opt_step
-
-    return opt_step(trainer)
-
-
-@DistributedPlugin("deepspeed").register("save_model")
-def save_model_deepspeed(trainer) -> None:
-    from .deepspeed import save_model
-
-    return save_model(trainer)

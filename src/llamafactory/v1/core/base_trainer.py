@@ -28,7 +28,6 @@ Train Phase:
 """
 
 from abc import abstractmethod
-from typing import Callable, Optional
 
 import torch
 import torch.nn.functional as F
@@ -41,6 +40,7 @@ from ..utils.helper import compute_valid_tokens
 from ..utils.types import BatchInput, HFModel, ModelOutput, Tensor, TorchDataset
 from .utils.batching import BatchGenerator
 from .utils.rendering import Renderer
+
 
 logger = logging.get_logger(__name__)
 
@@ -76,39 +76,29 @@ class BaseTrainer:
         if self.args.enable_activation_checkpointing:
             self.model.gradient_checkpointing_enable({"use_reentrant": False})
 
-        # Initialize plugin system
-        self._initialize_plugin_system()
+        self._accelerate_engine = None
+        dist_name = self.args.dist_config.name if self.args.dist_config is not None else None
 
-        # Determine if sharding requires optimizer first (e.g., DeepSpeed)
-        requires_optimizer_first = self._should_init_optimizer_before_sharding()
-        
-        if requires_optimizer_first:
-            self._init_optimizer()
-            self._shard_model()
-        else:
-            self._shard_model()
-            self._init_optimizer()
-
-        self._init_lr_scheduler()
-
-    def _initialize_plugin_system(self) -> None:
-        """Initialize the distributed plugin system and cache plugin hooks."""
-        self._plugin_funcs: dict[str, Optional[Callable]] = {}
-        
-        if self.args.dist_config is not None:
-            # Create the plugin instance based on configuration
+        if dist_name == "deepspeed":
+            # deepspeed: use accelerate's Accelerator + DeepSpeedPlugin (via hub)
             from ..plugins.trainer_plugins.distributed.hub import DistributedPlugin
-            
-            self.dist_plugin = DistributedPlugin(self.args.dist_config.name)
-            # Cache hooks immediately after plugin creation
-            self._cache_plugin_funcs()
-    
-    def _should_init_optimizer_before_sharding(self) -> bool:
-        """Determine if the distributed strategy requires optimizer to be initialized before model sharding."""
-        if self.args.dist_config is not None:
-            # DeepSpeed requires optimizer to be initialized before sharding for proper integration
-            return self.args.dist_config.name == "deepspeed"
-        return False
+
+            self._accelerate_engine = DistributedPlugin("deepspeed")(
+                self.model,
+                self.args.dist_config,
+                num_micro_batch=self.train_batch_generator.num_micro_batch,
+                micro_batch_size=self.args.micro_batch_size,
+            )
+            self._init_optimizer()
+            self._init_lr_scheduler()
+            self.model, self.optimizer, self.lr_scheduler = self._accelerate_engine.prepare(
+                self.model, self.optimizer, self.lr_scheduler
+            )
+        else:
+            # fsdp2 / DDP / no dist
+            self._shard_model()
+            self._init_optimizer()
+            self._init_lr_scheduler()
 
     def _create_batch_generator(self) -> None:
         self.train_batch_generator = BatchGenerator(
@@ -132,41 +122,12 @@ class BaseTrainer:
                 device_ids = None if self.device.type == "cpu" else [self.device.index]
                 self.model = DDP(self.model, device_ids=device_ids)
         else:
-            optimizer = getattr(self, "optimizer", None)
-            
-            # Prepare batch configuration for distributed training
-            batch_config = self._prepare_batch_config()
-            
-            # Apply the plugin to shard the model
-            self.model = self.dist_plugin(self.model, self.args.dist_config, optimizer=optimizer, batch_config=batch_config)
-            
-            if self._plugin_funcs.get("post_shard"):
-                self._plugin_funcs["post_shard"](self)
+            from ..plugins.trainer_plugins.distributed.hub import DistributedPlugin
 
-    def _prepare_batch_config(self) -> dict:
-        """Prepare the batch configuration for deepspeed distributed training."""
-        return {
-            "micro_batch_size": self.args.micro_batch_size,
-            "global_batch_size": self.train_batch_generator.global_batch_size,
-            "num_micro_batch": self.train_batch_generator.num_micro_batch,
-            "dp_size": self.dp_size,
-            "bf16": self.args.bf16,
-            "max_grad_norm": self.args.max_grad_norm,
-            "num_training_steps": self.num_training_steps,
-            "warmup_ratio": self.args.warmup_ratio,
-            "learning_rate": self.args.learning_rate,
-        }
-
-    def _cache_plugin_funcs(self) -> None:
-        """Cache distributed plugin functions to avoid repeated lookups."""
-        if self.dist_plugin is None:
-            return
-
-        for func_name in ["post_shard", "init_lr_scheduler", "backward", "opt_step", "save_model"]:
-            try:
-                self._plugin_funcs[func_name] = self.dist_plugin[func_name]
-            except ValueError:
-                self._plugin_funcs[func_name] = None
+            self.model = DistributedPlugin(self.args.dist_config.name)(
+                self.model,
+                self.args.dist_config,
+            )
 
     def _init_optimizer(self) -> None:
         """Init optimizer."""
@@ -180,13 +141,6 @@ class BaseTrainer:
 
     def _init_lr_scheduler(self) -> None:
         """Init lr scheduler."""
-        init_lr_scheduler_fn = self._plugin_funcs.get("init_lr_scheduler")
-        if init_lr_scheduler_fn:
-            lr_scheduler = init_lr_scheduler_fn(self)
-            if lr_scheduler is not None:
-                self.lr_scheduler = lr_scheduler
-                return
-
         if self.args.lr_scheduler_config is None:
             self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=lambda x: 1.0)
         else:
@@ -217,43 +171,9 @@ class BaseTrainer:
         """Compute the scalar loss."""
         ...
 
-    def _backward(self, loss: Tensor) -> None:
-        backward_fn = self._plugin_funcs.get("backward")
-        if backward_fn:
-            backward_fn(self, loss)
-        else:
-            loss.backward()
-
-    def _opt_step(self) -> float:
-        opt_step_fn = self._plugin_funcs.get("opt_step")
-        if opt_step_fn:
-            return opt_step_fn(self)
-
-        grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.max_grad_norm)
-        if torch.is_tensor(grad_norm):
-            grad_norm = grad_norm.item()
-
-        # isfinite(): argument 'input' (position 1) must be Tensor, not float
-        if not torch.isfinite(torch.tensor(grad_norm)):  # type: ignore # pyright: ignore [reportUnknownReturnType]
-            logger.warning_rank0(f"Gradient norm is not finite: {grad_norm}")
-        else:
-            self.optimizer.step()
-
-        self.lr_scheduler.step()
-        self.optimizer.zero_grad()
-        return grad_norm
-
     def fit(self) -> None:
         """Train the model."""
-        from tqdm import tqdm
-
         self.model.train()
-        
-        # Initialize progress bar on rank 0
-        progress_bar = None
-        if DistributedInterface().get_rank() == 0:
-            progress_bar = tqdm(total=self.num_training_steps, desc="Training", leave=True)
-
         for epoch in range(self.args.num_train_epochs):
             self.train_batch_generator.set_epoch(epoch)
             for micro_batches in self.train_batch_generator:
@@ -261,50 +181,60 @@ class BaseTrainer:
                 step_loss = 0
                 step_valid_tokens = compute_valid_tokens(micro_batches)
                 step_valid_tokens = DistributedInterface().all_reduce(step_valid_tokens, op=ReduceOp.SUM)
-                for micro_batch in micro_batches:
+                num_micro = len(micro_batches)
+                for i, micro_batch in enumerate(micro_batches):
                     loss = self.compute_loss(micro_batch)
                     mini_step_valid_tokens = compute_valid_tokens([micro_batch])
                     # fsdp uses mean reduction so we need to scale the loss by dp_size
                     loss = loss * mini_step_valid_tokens * self.dp_size / (step_valid_tokens + 1e-6)
 
-                    self._backward(loss)
+                    if self._accelerate_engine is not None:
+                        # deepspeed2: set sync_gradients so engine.step() only fires on last micro-batch
+                        self._accelerate_engine.accelerator.sync_gradients = (i == num_micro - 1)
+                        self._accelerate_engine.backward(loss)
+                    else:
+                        loss.backward()
                     step_loss += loss.item()
 
-                grad_norm = self._opt_step()
+                if self._accelerate_engine is not None:
+                    # deepspeed2: engine.step() already ran inside backward at the sync boundary
+                    grad_norm = self._accelerate_engine.get_grad_norm()
+                    self.lr_scheduler.step()    # no-op (DS wrapper)
+                    self.optimizer.zero_grad()  # no-op (DS wrapper)
+                else:
+                    grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.max_grad_norm).item()
+
+                    # isfinite(): argument 'input' (position 1) must be Tensor, not float
+                    if not torch.isfinite(torch.tensor(grad_norm)):  # type: ignore # pyright: ignore [reportUnknownReturnType]
+                        logger.warning_rank0(f"Gradient norm is not finite: {grad_norm}")
+                    else:
+                        self.optimizer.step()
+
+                    self.lr_scheduler.step()
+                    self.optimizer.zero_grad()
 
                 step_loss, grad_norm = DistributedInterface().all_reduce([step_loss, grad_norm])
                 DistributedInterface().sync()
-                
                 if DistributedInterface().get_rank() == 0:
-                    if progress_bar is not None:
-                        log_msg = {
-                            'epoch': epoch,
-                            'step': self.global_step,
-                            'loss': f"{step_loss:.4f}",
-                            'grad_norm': f"{grad_norm:.4f}"
-                        }
-                        tqdm.write(str(log_msg))
-                        progress_bar.update(1)
-                    else:
-                        print(f"Epoch {epoch}, Step {self.global_step}, Loss: {step_loss:.4f}, Grad Norm: {grad_norm:.4f}")
+                    print(f"Epoch {epoch}, Step {self.global_step}, Loss: {step_loss:.4f}, Grad Norm: {grad_norm:.4f}")
 
                 # Check if max_steps is reached
                 if self.global_step >= self.num_training_steps:
                     logger.info_rank0(f"Reached max_steps ({self.num_training_steps}), stopping training.")
-                    if progress_bar is not None:
-                        progress_bar.close()
                     return
-        
-        if progress_bar is not None:
-            progress_bar.close()
 
     def save_model(self) -> None:
         """Save the model."""
-        save_model_fn = self._plugin_funcs.get("save_model")
-        if save_model_fn:
-            return save_model_fn(self)
+        if self._accelerate_engine is not None:
+            # deepspeed: accelerate handles ZeRO-3 parameter gathering
+            self._accelerate_engine.save_model(self)
+        elif self.args.dist_config is not None and self.args.dist_config.name == "fsdp2":
+            # fsdp2: needs special parameter gathering for save
+            from ..plugins.trainer_plugins.distributed.hub import DistributedPlugin
 
-        model_to_save = self.model.module if hasattr(self.model, "module") else self.model
-        model_to_save.save_pretrained(self.args.output_dir, max_shard_size="4GB")
-        self.renderer.processor.save_pretrained(self.args.output_dir)
-        logger.info_rank0(f"Model saved to {self.args.output_dir}")
+            DistributedPlugin("fsdp2").save_model(self)
+        else:
+            model_to_save = self.model.module if hasattr(self.model, "module") else self.model
+            model_to_save.save_pretrained(self.args.output_dir)
+            self.renderer.processor.save_pretrained(self.args.output_dir, max_shard_size="5GB")
+            logger.info_rank0(f"Model saved to {self.args.output_dir}")
