@@ -19,7 +19,7 @@ this module leverages accelerate's Accelerator + DeepSpeedPlugin to handle
 initialization, backward, gradient accumulation, and model saving.
 """
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional
 
 import torch
 from accelerate import Accelerator
@@ -43,7 +43,7 @@ class AccelerateDeepSpeedEngine:
     - ZeRO-3 parameter gathering for saving
     """
 
-    def __init__(self, dist_config: Dict[str, Any], num_micro_batch: int = 1, micro_batch_size: int = 1):
+    def __init__(self, dist_config: dict[str, Any], num_micro_batch: int = 1, micro_batch_size: int = 1):
         config_file = dist_config.get("config_file")
         if not config_file:
             raise ValueError("DeepSpeed config_file is required in dist_config")
@@ -75,7 +75,7 @@ class AccelerateDeepSpeedEngine:
         model: torch.nn.Module,
         optimizer: torch.optim.Optimizer,
         lr_scheduler: Optional[Any] = None,
-    ) -> Tuple[torch.nn.Module, torch.optim.Optimizer, Any]:
+    ) -> tuple[torch.nn.Module, torch.optim.Optimizer, Any]:
         """Prepare model, optimizer, and lr_scheduler using accelerate.
 
         Internally calls deepspeed.initialize() and wraps the returned objects.
@@ -116,9 +116,7 @@ class AccelerateDeepSpeedEngine:
         state_dict = self.accelerator.get_state_dict(trainer.model)
 
         if self.accelerator.is_main_process:
-            unwrapped_model.save_pretrained(
-                output_dir, state_dict=state_dict, max_shard_size="4GB"
-            )
+            unwrapped_model.save_pretrained(output_dir, state_dict=state_dict, max_shard_size="4GB")
             trainer.renderer.processor.save_pretrained(output_dir)
 
         self.accelerator.wait_for_everyone()

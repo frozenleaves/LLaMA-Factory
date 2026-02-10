@@ -45,4 +45,3 @@ def shard_model_deepspeed(model: HFModel, dist_config: PluginConfig, **kwargs) -
         num_micro_batch=kwargs.get("num_micro_batch"),
         micro_batch_size=kwargs.get("micro_batch_size"),
     ).shard_model(model)
-

@@ -190,7 +190,7 @@ class BaseTrainer:
 
                     if self._accelerate_engine is not None:
                         # deepspeed: set sync_gradients so engine.step() only fires on last micro-batch
-                        self._accelerate_engine.accelerator.sync_gradients = (i == num_micro - 1)
+                        self._accelerate_engine.accelerator.sync_gradients = i == num_micro - 1
                         self._accelerate_engine.backward(loss)
                     else:
                         loss.backward()
@@ -199,7 +199,7 @@ class BaseTrainer:
                 if self._accelerate_engine is not None:
                     # deepspeed: engine.step() already ran inside backward at the sync boundary
                     grad_norm = self._accelerate_engine.get_grad_norm()
-                    self.lr_scheduler.step()    # no-op (DS wrapper)
+                    self.lr_scheduler.step()  # no-op (DS wrapper)
                     self.optimizer.zero_grad()  # no-op (DS wrapper)
                 else:
                     grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.max_grad_norm).item()
