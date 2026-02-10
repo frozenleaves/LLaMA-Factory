@@ -53,10 +53,6 @@ class TrainingArguments:
         default=1.0,
         metadata={"help": "Maximum gradient norm for training."},
     )
-    warmup_ratio: float = field(
-        default=0.1,
-        metadata={"help": "Warmup ratio for training."},
-    )
     bf16: bool = field(
         default=False,
         metadata={"help": "Use bf16 for training."},
