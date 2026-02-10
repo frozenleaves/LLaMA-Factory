@@ -61,7 +61,7 @@ def save_model(trainer) -> None:
 
     if DistributedInterface().get_rank() == 0:
         model_to_save = model.module if hasattr(model, "module") else model
-        model_to_save.save_pretrained(args.output_dir, state_dict=state_dict, max_shard_size="5GB")
+        model_to_save.save_pretrained(args.output_dir, state_dict=state_dict, max_shard_size="4GB")
         trainer.renderer.processor.save_pretrained(args.output_dir)
         logger.info(f"Model saved to {args.output_dir}")
 

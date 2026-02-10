@@ -236,5 +236,5 @@ class BaseTrainer:
         else:
             model_to_save = self.model.module if hasattr(self.model, "module") else self.model
             model_to_save.save_pretrained(self.args.output_dir)
-            self.renderer.processor.save_pretrained(self.args.output_dir, max_shard_size="5GB")
+            self.renderer.processor.save_pretrained(self.args.output_dir, max_shard_size="4GB")
             logger.info_rank0(f"Model saved to {self.args.output_dir}")
