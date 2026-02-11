@@ -193,8 +193,35 @@ class FSDP2Engine:
 
         return model
 
+    def _ensure_uniform_param_dtype(self, model: PreTrainedModel) -> None:
+        """Ensure all parameters share the same dtype before FSDP wrapping.
+
+        When models are created via ``from_config`` (meta init), different
+        sub-modules may initialise parameters with different dtypes (e.g. the
+        vision encoder in float32 and the language model in bfloat16).  FSDP2
+        requires uniform dtype within each shard group, so we detect and fix
+        any mismatch here.
+        """
+        dtype_counts: dict[torch.dtype, int] = {}
+        for p in model.parameters():
+            dtype_counts[p.dtype] = dtype_counts.get(p.dtype, 0) + 1
+
+        if len(dtype_counts) <= 1:
+            return
+
+        # Pick the most common dtype as the target
+        target_dtype = max(dtype_counts, key=dtype_counts.get)  # type: ignore[arg-type]
+        logger.warning(
+            f"Mixed parameter dtypes detected: {dtype_counts}. "
+            f"Converting all parameters to {target_dtype} for FSDP2 compatibility."
+        )
+        for p in model.parameters():
+            if p.dtype != target_dtype:
+                p.data = p.data.to(target_dtype)
+
     def shard_model(self, model: PreTrainedModel) -> PreTrainedModel:
         if model.device.type == "meta":
+            self._ensure_uniform_param_dtype(model)
             model = self.prepare_model(model)
             model = self.materialize_and_load(model, hf_model_path=model.config.name_or_path, dcp_path=self.dcp_path)
         else:

@@ -80,10 +80,9 @@ class BaseTrainer:
         dist_name = self.args.dist_config.name if self.args.dist_config is not None else None
 
         if dist_name == "deepspeed":
-            # deepspeed: use accelerate's Accelerator + DeepSpeedPlugin (via hub)
             from ..plugins.trainer_plugins.distributed.hub import DistributedPlugin
 
-            self._accelerate_engine = DistributedPlugin("deepspeed")(
+            self._deepspeed_engine = DistributedPlugin("deepspeed")(
                 self.model,
                 self.args.dist_config,
                 num_micro_batch=self.train_batch_generator.num_micro_batch,
@@ -91,7 +90,7 @@ class BaseTrainer:
             )
             self._init_optimizer()
             self._init_lr_scheduler()
-            self.model, self.optimizer, self.lr_scheduler = self._accelerate_engine.prepare(
+            self.model, self.optimizer, self.lr_scheduler = self._deepspeed_engine.prepare(
                 self.model, self.optimizer, self.lr_scheduler
             )
         else:
@@ -188,17 +187,17 @@ class BaseTrainer:
                     # fsdp uses mean reduction so we need to scale the loss by dp_size
                     loss = loss * mini_step_valid_tokens * self.dp_size / (step_valid_tokens + 1e-6)
 
-                    if self._accelerate_engine is not None:
+                    if self._deepspeed_engine is not None:
                         # deepspeed: set sync_gradients so engine.step() only fires on last micro-batch
-                        self._accelerate_engine.accelerator.sync_gradients = i == num_micro - 1
-                        self._accelerate_engine.backward(loss)
+                        self._deepspeed_engine.accelerator.sync_gradients = i == num_micro - 1
+                        self._deepspeed_engine.backward(loss)
                     else:
                         loss.backward()
                     step_loss += loss.item()
 
-                if self._accelerate_engine is not None:
+                if self._deepspeed_engine is not None:
                     # deepspeed: engine.step() already ran inside backward at the sync boundary
-                    grad_norm = self._accelerate_engine.get_grad_norm()
+                    grad_norm = self._deepspeed_engine.get_grad_norm()
                     self.lr_scheduler.step()  # no-op (DS wrapper)
                     self.optimizer.zero_grad()  # no-op (DS wrapper)
                 else:
@@ -225,9 +224,9 @@ class BaseTrainer:
 
     def save_model(self) -> None:
         """Save the model."""
-        if self._accelerate_engine is not None:
+        if self._deepspeed_engine is not None:
             # deepspeed: accelerate handles ZeRO-3 parameter gathering
-            self._accelerate_engine.save_model(self)
+            self._deepspeed_engine.save_model(self)
         elif self.args.dist_config is not None and self.args.dist_config.name == "fsdp2":
             # fsdp2: needs special parameter gathering for save
             from ..plugins.trainer_plugins.distributed.hub import DistributedPlugin

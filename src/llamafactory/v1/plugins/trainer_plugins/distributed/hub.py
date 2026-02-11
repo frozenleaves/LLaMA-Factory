@@ -38,9 +38,9 @@ def save_model_fsdp2(trainer) -> None:
 
 @DistributedPlugin("deepspeed").register()
 def shard_model_deepspeed(model: HFModel, dist_config: PluginConfig, **kwargs) -> HFModel:
-    from .deepspeed import AccelerateDeepSpeedEngine
+    from .deepspeed import DeepSpeedEngine
 
-    return AccelerateDeepSpeedEngine(
+    return DeepSpeedEngine(
         dist_config,
         num_micro_batch=kwargs.get("num_micro_batch"),
         micro_batch_size=kwargs.get("micro_batch_size"),

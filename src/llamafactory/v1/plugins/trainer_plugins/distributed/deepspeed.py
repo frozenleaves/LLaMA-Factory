@@ -31,7 +31,7 @@ from ....utils.logging import get_logger
 logger = get_logger(__name__)
 
 
-class AccelerateDeepSpeedEngine:
+class DeepSpeedEngine:
     """DeepSpeed integration using accelerate's built-in capabilities.
 
     This replaces the manual DeepSpeedConfigHelper / DeepSpeedEngine approach
@@ -61,9 +61,9 @@ class AccelerateDeepSpeedEngine:
         if ds_config.get("train_micro_batch_size_per_gpu") in (None, "auto"):
             ds_config["train_micro_batch_size_per_gpu"] = micro_batch_size
 
-        logger.info_rank0(f"AccelerateDeepSpeedEngine initialized with config: {config_file}")
+        logger.info_rank0(f"DeepSpeedEngine initialized with config: {config_file}")
 
-    def shard_model(self, model: torch.nn.Module) -> "AccelerateDeepSpeedEngine":
+    def shard_model(self, model: torch.nn.Module) -> "DeepSpeedEngine":
         """No-op shard — actual model wrapping happens in prepare().
 
         Returns self so the caller gets the engine instance via the hub interface.

@@ -10,7 +10,7 @@ kernel_config:
 
 dist_config:
     name: deepspeed
-    config_file: examples/deepspeed/ds_z2_config.json
+    config_file: examples/deepspeed/ds_z3_config.json
 
 ### data
 train_dataset: data/v1_sft_demo.yaml 
