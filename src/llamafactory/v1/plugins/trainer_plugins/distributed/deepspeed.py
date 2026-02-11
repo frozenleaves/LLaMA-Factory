@@ -26,6 +26,7 @@ from accelerate import Accelerator
 from accelerate.utils import DeepSpeedPlugin
 
 from ....utils.logging import get_logger
+from ....utils.types import HFModel, Processor
 
 
 logger = get_logger(__name__)
@@ -63,7 +64,7 @@ class DeepSpeedEngine:
 
         logger.info_rank0(f"DeepSpeedEngine initialized with config: {config_file}")
 
-    def shard_model(self, model: torch.nn.Module) -> "DeepSpeedEngine":
+    def shard_model(self, model: HFModel) -> "DeepSpeedEngine":
         """No-op shard — actual model wrapping happens in prepare().
 
         Returns self so the caller gets the engine instance via the hub interface.
@@ -72,10 +73,10 @@ class DeepSpeedEngine:
 
     def prepare(
         self,
-        model: torch.nn.Module,
+        model: HFModel,
         optimizer: torch.optim.Optimizer,
         lr_scheduler: Optional[Any] = None,
-    ) -> tuple[torch.nn.Module, torch.optim.Optimizer, Any]:
+    ) -> tuple[HFModel, torch.optim.Optimizer, Any]:
         """Prepare model, optimizer, and lr_scheduler using accelerate.
 
         Internally calls deepspeed.initialize() and wraps the returned objects.
@@ -105,19 +106,18 @@ class DeepSpeedEngine:
             return engine_wrapper.engine.get_global_grad_norm() or 0.0
         return 0.0
 
-    def save_model(self, trainer) -> None:
+    def save_model(self, model: HFModel, output_dir: str, processor: Processor) -> None:
         """Save model using accelerate's built-in ZeRO-aware utilities.
 
         Handles ZeRO-3 parameter gathering automatically via
         accelerator.get_state_dict().
         """
-        output_dir = trainer.args.output_dir
-        unwrapped_model = self.accelerator.unwrap_model(trainer.model)
-        state_dict = self.accelerator.get_state_dict(trainer.model)
+        unwrapped_model = self.accelerator.unwrap_model(model)
+        state_dict = self.accelerator.get_state_dict(model)
 
         if self.accelerator.is_main_process:
             unwrapped_model.save_pretrained(output_dir, state_dict=state_dict, max_shard_size="4GB")
-            trainer.renderer.processor.save_pretrained(output_dir, max_shard_size="4GB")
+            processor.save_pretrained(output_dir, max_shard_size="4GB")
 
         self.accelerator.wait_for_everyone()
         logger.info_rank0(f"Model saved to {output_dir}")

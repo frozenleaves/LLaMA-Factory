@@ -14,7 +14,7 @@
 
 from ....config.arg_utils import PluginConfig
 from ....utils.plugin import BasePlugin
-from ....utils.types import HFModel
+from ....utils.types import HFModel, Processor
 
 
 class DistributedPlugin(BasePlugin):
@@ -30,10 +30,10 @@ def shard_model_fsdp2(model: HFModel, dist_config: PluginConfig, **kwargs) -> HF
 
 
 @DistributedPlugin("fsdp2").register("save_model")
-def save_model_fsdp2(trainer) -> None:
+def save_model_fsdp2(model: HFModel, output_dir: str, processor: Processor) -> None:
     from .fsdp2 import save_model
 
-    return save_model(trainer)
+    return save_model(model, output_dir, processor)
 
 
 @DistributedPlugin("deepspeed").register()

@@ -198,8 +198,6 @@ class BaseTrainer:
                 if self._deepspeed_engine is not None:
                     # deepspeed: engine.step() already ran inside backward at the sync boundary
                     grad_norm = self._deepspeed_engine.get_grad_norm()
-                    self.lr_scheduler.step()  # no-op (DS wrapper)
-                    self.optimizer.zero_grad()  # no-op (DS wrapper)
                 else:
                     grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.max_grad_norm).item()
 
@@ -224,14 +222,15 @@ class BaseTrainer:
 
     def save_model(self) -> None:
         """Save the model."""
+
         if self._deepspeed_engine is not None:
             # deepspeed: accelerate handles ZeRO-3 parameter gathering
-            self._deepspeed_engine.save_model(self)
+            self._deepspeed_engine.save_model(self.model, self.args.output_dir, self.renderer.processor)
         elif self.args.dist_config is not None and self.args.dist_config.name == "fsdp2":
             # fsdp2: needs special parameter gathering for save
             from ..plugins.trainer_plugins.distributed.hub import DistributedPlugin
 
-            DistributedPlugin("fsdp2").save_model(self)
+            DistributedPlugin("fsdp2").save_model(self.model, self.args.output_dir, self.renderer.processor)
         else:
             model_to_save = self.model.module if hasattr(self.model, "module") else self.model
             model_to_save.save_pretrained(self.args.output_dir, max_shard_size="4GB")

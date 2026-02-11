@@ -28,12 +28,13 @@ from transformers import PreTrainedModel
 from ....accelerator.helper import get_current_accelerator
 from ....accelerator.interface import DistributedInterface
 from ....utils.logging import get_logger
+from ....utils.types import HFModel, Processor
 
 
 logger = get_logger(__name__)
 
 
-def get_transformer_layer_cls(model: PreTrainedModel) -> type[nn.Module] | None:
+def get_transformer_layer_cls(model: HFModel) -> type[nn.Module] | None:
     no_split_modules = getattr(model, "_no_split_modules", None)
     if no_split_modules:
         if isinstance(no_split_modules, (list, tuple)):
@@ -49,10 +50,7 @@ def get_transformer_layer_cls(model: PreTrainedModel) -> type[nn.Module] | None:
     return None
 
 
-def save_model(trainer) -> None:
-    model = trainer.model
-    args = trainer.args
-
+def save_model(model: HFModel, output_dir: str, processor: Processor) -> None:
     if DistributedInterface().get_rank() == 0:
         logger.info("Gathering state dict for saving...")
 
@@ -61,9 +59,9 @@ def save_model(trainer) -> None:
 
     if DistributedInterface().get_rank() == 0:
         model_to_save = model.module if hasattr(model, "module") else model
-        model_to_save.save_pretrained(args.output_dir, state_dict=state_dict, max_shard_size="4GB")
-        trainer.renderer.processor.save_pretrained(args.output_dir, max_shard_size="4GB")
-        logger.info(f"Model saved to {args.output_dir}")
+        model_to_save.save_pretrained(output_dir, state_dict=state_dict, max_shard_size="4GB")
+        processor.save_pretrained(output_dir, max_shard_size="4GB")
+        logger.info(f"Model saved to {output_dir}")
 
 
 class FSDP2Engine:
@@ -111,7 +109,7 @@ class FSDP2Engine:
             cast_forward_inputs=True,
         )
 
-    def prepare_model(self, model: PreTrainedModel) -> PreTrainedModel:
+    def prepare_model(self, model: HFModel) -> HFModel:
         if self.fsdp_mesh is None:
             logger.warning("No FSDP Mesh available, skipping FSDP wrapping.")
             return model
@@ -173,7 +171,7 @@ class FSDP2Engine:
         return model
 
     @torch.no_grad()
-    def materialize_and_load(self, model: PreTrainedModel, hf_model_path: str, dcp_path: str = None):
+    def materialize_and_load(self, model: HFModel, hf_model_path: str, dcp_path: str = None):
         if self.rank == 0:
             logger.info("Materializing sharded model params...")
 
@@ -193,42 +191,15 @@ class FSDP2Engine:
 
         return model
 
-    def _ensure_uniform_param_dtype(self, model: PreTrainedModel) -> None:
-        """Ensure all parameters share the same dtype before FSDP wrapping.
-
-        When models are created via ``from_config`` (meta init), different
-        sub-modules may initialise parameters with different dtypes (e.g. the
-        vision encoder in float32 and the language model in bfloat16).  FSDP2
-        requires uniform dtype within each shard group, so we detect and fix
-        any mismatch here.
-        """
-        dtype_counts: dict[torch.dtype, int] = {}
-        for p in model.parameters():
-            dtype_counts[p.dtype] = dtype_counts.get(p.dtype, 0) + 1
-
-        if len(dtype_counts) <= 1:
-            return
-
-        # Pick the most common dtype as the target
-        target_dtype = max(dtype_counts, key=dtype_counts.get)  # type: ignore[arg-type]
-        logger.warning(
-            f"Mixed parameter dtypes detected: {dtype_counts}. "
-            f"Converting all parameters to {target_dtype} for FSDP2 compatibility."
-        )
-        for p in model.parameters():
-            if p.dtype != target_dtype:
-                p.data = p.data.to(target_dtype)
-
-    def shard_model(self, model: PreTrainedModel) -> PreTrainedModel:
+    def shard_model(self, model: HFModel) -> HFModel:
         if model.device.type == "meta":
-            self._ensure_uniform_param_dtype(model)
             model = self.prepare_model(model)
             model = self.materialize_and_load(model, hf_model_path=model.config.name_or_path, dcp_path=self.dcp_path)
         else:
             model = self.prepare_model(model)
         return model
 
-    def _load_from_dcp(self, model: PreTrainedModel, dcp_path: str):
+    def _load_from_dcp(self, model: HFModel, dcp_path: str):
         import torch.distributed.checkpoint as dcp
 
         try:
@@ -247,7 +218,7 @@ class FSDP2Engine:
             logger.error(f"Failed to load from DCP: {e}")
             raise e
 
-    def _load_weights_from_hf_checkpoint(self, model, hf_model_path):
+    def _load_weights_from_hf_checkpoint(self, model: HFModel, hf_model_path: str):
         import glob
         import json
 
