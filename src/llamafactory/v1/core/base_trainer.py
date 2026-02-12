@@ -222,7 +222,6 @@ class BaseTrainer:
 
     def save_model(self) -> None:
         """Save the model."""
-
         if self._deepspeed_engine is not None:
             from ..plugins.trainer_plugins.distributed.hub import DistributedPlugin
 
