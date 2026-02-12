@@ -22,7 +22,6 @@ from ....utils.plugin import BasePlugin
 
 if TYPE_CHECKING:
     from ....utils.types import HFModel, Processor
-    from .deepspeed import DeepSpeedEngine
 
 
 class DistributedPlugin(BasePlugin):
@@ -56,7 +55,7 @@ def shard_model_deepspeed(model: HFModel, dist_config: PluginConfig, **kwargs) -
 
 
 @DistributedPlugin("deepspeed").register("save_model")
-def save_model_deepspeed(engine: DeepSpeedEngine, model: HFModel, output_dir: str, processor: Processor) -> None:
+def save_model_deepspeed(model: HFModel, output_dir: str, processor: Processor) -> None:
     from .deepspeed import save_model
 
-    return save_model(engine, model, output_dir, processor)
+    return save_model(model, output_dir, processor)

@@ -222,16 +222,12 @@ class BaseTrainer:
 
     def save_model(self) -> None:
         """Save the model."""
-        if self._deepspeed_engine is not None:
+        if self.args.dist_config is not None and self.args.dist_config.name in ("deepspeed", "fsdp2"):
             from ..plugins.trainer_plugins.distributed.hub import DistributedPlugin
 
-            DistributedPlugin("deepspeed").save_model(
-                self._deepspeed_engine, self.model, self.args.output_dir, self.renderer.processor
+            DistributedPlugin(self.args.dist_config.name).save_model(
+                self.model, self.args.output_dir, self.renderer.processor
             )
-        elif self.args.dist_config is not None and self.args.dist_config.name == "fsdp2":
-            from ..plugins.trainer_plugins.distributed.hub import DistributedPlugin
-
-            DistributedPlugin("fsdp2").save_model(self.model, self.args.output_dir, self.renderer.processor)
         else:
             model_to_save = self.model.module if hasattr(self.model, "module") else self.model
             model_to_save.save_pretrained(self.args.output_dir, max_shard_size="4GB")

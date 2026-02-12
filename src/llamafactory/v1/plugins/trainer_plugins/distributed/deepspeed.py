@@ -86,6 +86,8 @@ class DeepSpeedEngine:
         else:
             model, optimizer = self.accelerator.prepare(model, optimizer)
 
+        model._accelerator = self.accelerator  # type: ignore[assignment]
+
         logger.info_rank0("Model, optimizer, and lr_scheduler prepared via accelerate")
         return model, optimizer, lr_scheduler
 
@@ -106,23 +108,22 @@ class DeepSpeedEngine:
             return engine_wrapper.engine.get_global_grad_norm() or 0.0
         return 0.0
 
-    def save_model(self, model: HFModel, output_dir: str, processor: Processor) -> None:
-        """Save model using accelerate's built-in ZeRO-aware utilities.
 
-        Handles ZeRO-3 parameter gathering automatically via
-        accelerator.get_state_dict().
-        """
-        unwrapped_model = self.accelerator.unwrap_model(model)
-        state_dict = self.accelerator.get_state_dict(model)
+def save_model(model: HFModel, output_dir: str, processor: Processor) -> None:
+    """Save model using accelerate's built-in ZeRO-aware utilities.
 
-        if self.accelerator.is_main_process:
-            unwrapped_model.save_pretrained(output_dir, state_dict=state_dict, max_shard_size="4GB")
-            processor.save_pretrained(output_dir, max_shard_size="4GB")
+    Expects model._accelerator to be set during prepare().
+    Handles ZeRO-3 parameter gathering automatically via
+    accelerator.get_state_dict().
+    """
+    accelerator: Accelerator = model._accelerator  # type: ignore[union-attr]
 
-        self.accelerator.wait_for_everyone()
-        logger.info_rank0(f"Model saved to {output_dir}")
+    unwrapped_model = accelerator.unwrap_model(model)
+    state_dict = accelerator.get_state_dict(model)
 
+    if accelerator.is_main_process:
+        unwrapped_model.save_pretrained(output_dir, state_dict=state_dict, max_shard_size="4GB")
+        processor.save_pretrained(output_dir, max_shard_size="4GB")
 
-def save_model(engine: "DeepSpeedEngine", model: HFModel, output_dir: str, processor: Processor) -> None:
-
-    engine.save_model(model, output_dir, processor)
+    accelerator.wait_for_everyone()
+    logger.info_rank0(f"Model saved to {output_dir}")
