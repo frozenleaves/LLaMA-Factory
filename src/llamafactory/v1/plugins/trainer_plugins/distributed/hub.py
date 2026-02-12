@@ -18,10 +18,10 @@ from typing import TYPE_CHECKING
 
 from ....config.arg_utils import PluginConfig
 from ....utils.plugin import BasePlugin
-from ....utils.types import HFModel, Processor
 
 
 if TYPE_CHECKING:
+    from ....utils.types import HFModel, Processor
     from .deepspeed import DeepSpeedEngine
 
 
