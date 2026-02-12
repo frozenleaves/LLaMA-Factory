@@ -121,3 +121,8 @@ class DeepSpeedEngine:
 
         self.accelerator.wait_for_everyone()
         logger.info_rank0(f"Model saved to {output_dir}")
+
+
+def save_model(engine: "DeepSpeedEngine", model: HFModel, output_dir: str, processor: Processor) -> None:
+
+    engine.save_model(model, output_dir, processor)

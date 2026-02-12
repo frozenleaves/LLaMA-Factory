@@ -12,9 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from ....config.arg_utils import PluginConfig
 from ....utils.plugin import BasePlugin
 from ....utils.types import HFModel, Processor
+
+if TYPE_CHECKING:
+    from .deepspeed import DeepSpeedEngine
 
 
 class DistributedPlugin(BasePlugin):
@@ -45,3 +52,10 @@ def shard_model_deepspeed(model: HFModel, dist_config: PluginConfig, **kwargs) -
         num_micro_batch=kwargs.get("num_micro_batch"),
         micro_batch_size=kwargs.get("micro_batch_size"),
     ).shard_model(model)
+
+
+@DistributedPlugin("deepspeed").register("save_model")
+def save_model_deepspeed(engine: "DeepSpeedEngine", model: HFModel, output_dir: str, processor: Processor) -> None:
+    from .deepspeed import save_model
+
+    return save_model(engine, model, output_dir, processor)

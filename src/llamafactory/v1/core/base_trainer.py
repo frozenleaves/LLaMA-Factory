@@ -224,10 +224,12 @@ class BaseTrainer:
         """Save the model."""
 
         if self._deepspeed_engine is not None:
-            # deepspeed: accelerate handles ZeRO-3 parameter gathering
-            self._deepspeed_engine.save_model(self.model, self.args.output_dir, self.renderer.processor)
+            from ..plugins.trainer_plugins.distributed.hub import DistributedPlugin
+
+            DistributedPlugin("deepspeed").save_model(
+                self._deepspeed_engine, self.model, self.args.output_dir, self.renderer.processor
+            )
         elif self.args.dist_config is not None and self.args.dist_config.name == "fsdp2":
-            # fsdp2: needs special parameter gathering for save
             from ..plugins.trainer_plugins.distributed.hub import DistributedPlugin
 
             DistributedPlugin("fsdp2").save_model(self.model, self.args.output_dir, self.renderer.processor)
