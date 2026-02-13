@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -70,13 +71,13 @@ def read_args(args: dict[str, Any] | list[str] | None = None) -> dict[str, Any] 
     if args is not None:
         return args
 
-    if sys.argv[1].endswith(".yaml") or sys.argv[1].endswith(".yml"):
+    if len(sys.argv) > 1 and (sys.argv[1].endswith(".yaml") or sys.argv[1].endswith(".yml")):
         override_config = OmegaConf.from_cli(sys.argv[2:])
         dict_config = OmegaConf.load(Path(sys.argv[1]).absolute())
         return OmegaConf.to_container(OmegaConf.merge(dict_config, override_config))
-    elif sys.argv[1].endswith(".json"):
+    elif len(sys.argv) > 1 and sys.argv[1].endswith(".json"):
         override_config = OmegaConf.from_cli(sys.argv[2:])
-        dict_config = OmegaConf.load(Path(sys.argv[1]).absolute())
+        dict_config = OmegaConf.create(json.load(Path(sys.argv[1]).absolute()))
         return OmegaConf.to_container(OmegaConf.merge(dict_config, override_config))
     else:
         return sys.argv[1:]
@@ -138,10 +139,6 @@ def _verify_model_args(
         if model_args.adapter_name_or_path is not None and len(model_args.adapter_name_or_path) != 1:
             raise ValueError("Quantized model only accepts a single adapter. Merge them first.")
 
-    if data_args.template == "yi" and model_args.use_fast_tokenizer:
-        logger.warning_rank0("We should use slow tokenizer for the Yi models. Change `use_fast_tokenizer` to False.")
-        model_args.use_fast_tokenizer = False
-
 
 def _check_extra_dependencies(
     model_args: "ModelArguments",
@@ -187,9 +184,7 @@ def _check_extra_dependencies(
 
     if training_args is not None:
         if training_args.deepspeed:
-            # pin deepspeed version < 0.17 because of https://github.com/deepspeedai/DeepSpeed/issues/7347
             check_version("deepspeed", mandatory=True)
-            check_version("deepspeed>=0.10.0,<=0.16.9")
 
         if training_args.predict_with_generate:
             check_version("jieba", mandatory=True)
@@ -339,7 +334,7 @@ def get_train_args(args: dict[str, Any] | list[str] | None = None) -> _TRAIN_CLS
     if training_args.deepspeed is not None and (finetuning_args.use_galore or finetuning_args.use_apollo):
         raise ValueError("GaLore and APOLLO are incompatible with DeepSpeed yet.")
 
-    if training_args.fp8 and training_args.quantization_bit is not None:
+    if not finetuning_args.use_mca and training_args.fp8 and model_args.quantization_bit is not None:
         raise ValueError("FP8 training is not compatible with quantization. Please disable one of them.")
 
     if model_args.infer_backend != EngineName.HF:
@@ -358,7 +353,7 @@ def get_train_args(args: dict[str, Any] | list[str] | None = None) -> _TRAIN_CLS
     _verify_model_args(model_args, data_args, finetuning_args)
     _check_extra_dependencies(model_args, finetuning_args, training_args)
 
-    if training_args.fp8_enable_fsdp_float8_all_gather and not training_args.fp8:
+    if not finetuning_args.use_mca and training_args.fp8_enable_fsdp_float8_all_gather and not training_args.fp8:
         logger.warning_rank0("fp8_enable_fsdp_float8_all_gather requires fp8=True. Setting fp8=True.")
         model_args.fp8 = True
 

@@ -24,16 +24,17 @@ Init Phase:
 import importlib
 from pathlib import Path
 
-from ....utils.logging import get_logger
+from ....utils import logging
 from ....utils.plugin import BasePlugin
+from ....utils.types import HFModel
 from .registry import Registry
 
 
-logger = get_logger(__name__)
+logger = logging.get_logger(__name__)
 
 
 def scan_all_kernels():
-    r"""Scan all kernels in the ``ops`` directory.
+    """Scan all kernels in the ``ops`` directory.
 
     Scans the ``ops`` directory for all ``.py`` files and attempts to import them.
     Importing triggers the :func:`~registry.register_kernel` decorator, which automatically registers the kernels.
@@ -77,7 +78,7 @@ default_kernels = scan_all_kernels()
 
 
 def get_default_kernels():
-    r"""Get a list of default registered kernel IDs.
+    """Get a list of default registered kernel IDs.
 
     Returns:
         list[str]: List of kernel IDs.
@@ -86,7 +87,7 @@ def get_default_kernels():
 
 
 def apply_kernel(kernel_id: str, **kwargs):
-    r"""Applies a specific kernel to the model.
+    """Applies a specific kernel to the model.
 
     Args:
         kernel_id (str): The ID of the kernel to apply.
@@ -99,34 +100,41 @@ def apply_kernel(kernel_id: str, **kwargs):
     kernel = default_kernels.get(kernel_id)
     if kernel is None:
         raise ValueError(f"Kernel {kernel_id} not found")
+
     kernel.apply(**kwargs)
 
 
 class KernelPlugin(BasePlugin):
-    r"""Plugin for managing kernel optimizations."""
+    """Plugin for managing kernel optimizations."""
 
     pass
 
 
-@KernelPlugin("auto").register
-def apply_default_kernels(**kwargs):
-    r"""Applies all default registered kernels to the model.
+@KernelPlugin("auto").register()
+def apply_default_kernels(model: HFModel, include_kernels: str = None) -> HFModel:
+    """Applies all default registered kernels to the model.
 
     Args:
-        **kwargs: Keyword arguments passed to the kernel application function.
-                  Typically includes the model instance and the include_kernels configuration.
+        model (HFModel): The model instance to apply kernels to.
+        include_kernels (str, optional): Comma-separated list of kernel IDs to apply.
+                                         If "auto" or True, applies all default kernels.
+                                         If None or False, no kernels are applied.
+                                         Defaults to None.
 
     Returns:
         HFModel: The model with applied kernels.
     """
-    if not kwargs.get("include_kernels"):  # None/False/empty string
-        return kwargs.get("model")
-    elif kwargs.get("include_kernels") == "auto" or kwargs.get("include_kernels") is True:  # True/auto
+    if not include_kernels:
+        return model
+    elif include_kernels == "auto" or include_kernels is True:
         use_kernels = default_kernels.keys()
     else:
-        use_kernels = kwargs.get("include_kernels").split(",")  # "kernel_id1,kernel_id2,kernel_id3"
+        use_kernels = include_kernels.split(",")  # "kernel_id1,kernel_id2,kernel_id3"
+
     for kernel in use_kernels:
         if kernel not in default_kernels:
             raise ValueError(f"Kernel {kernel} not found")
-        apply_kernel(kernel, **kwargs)
-    return kwargs.get("model")
+
+        apply_kernel(kernel, model=model)
+
+    return model

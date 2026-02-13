@@ -17,7 +17,7 @@
 
 
 import json
-from enum import Enum, unique
+from enum import StrEnum, unique
 
 
 class PluginConfig(dict):
@@ -36,7 +36,7 @@ PluginArgument = PluginConfig | dict | str | None
 
 
 @unique
-class ModelClass(str, Enum):
+class ModelClass(StrEnum):
     """Auto class for model config."""
 
     LLM = "llm"
@@ -45,9 +45,17 @@ class ModelClass(str, Enum):
 
 
 @unique
-class SampleBackend(str, Enum):
+class SampleBackend(StrEnum):
     HF = "hf"
     VLLM = "vllm"
+
+
+@unique
+class BatchingStrategy(StrEnum):
+    NORMAL = "normal"
+    PADDING_FREE = "padding_free"
+    DYNAMIC_BATCHING = "dynamic_batching"
+    DYNAMIC_PADDING_FREE = "dynamic_padding_free"
 
 
 def _convert_str_dict(data: dict) -> dict:

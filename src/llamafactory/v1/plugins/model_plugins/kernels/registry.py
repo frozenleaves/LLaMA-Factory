@@ -20,8 +20,6 @@ Init Phase:
 
 """
 
-from typing import Optional
-
 from ....accelerator.helper import get_current_accelerator
 from .base import BaseKernel
 
@@ -30,7 +28,7 @@ __all__ = ["Registry", "register_kernel"]
 
 
 class Registry:
-    r"""Registry for managing kernel implementations.
+    """Registry for managing kernel implementations.
 
     Storage structure: ``{ "kernel_id": Class }``
     """
@@ -38,8 +36,8 @@ class Registry:
     _kernels: dict[str, type[BaseKernel]] = {}
 
     @classmethod
-    def register(cls, kernel_cls: type[BaseKernel]):
-        r"""Decorator to register a kernel class.
+    def register(cls, kernel_cls: type[BaseKernel]) -> type[BaseKernel] | None:
+        """Decorator to register a kernel class.
 
         The class must inherit from :class:`BaseKernel` and specify ``_kernel_id`` and ``_device`` attributes.
 
@@ -47,7 +45,7 @@ class Registry:
             kernel_cls (type[BaseKernel]): The kernel class to register.
 
         Returns:
-            type[BaseKernel]: The registered kernel class.
+            type[BaseKernel] | None: The registered kernel class if the device type matches the current accelerator
 
         Raises:
             TypeError: If the class does not inherit from :class:`BaseKernel`.
@@ -55,6 +53,7 @@ class Registry:
         """
         if not issubclass(kernel_cls, BaseKernel):
             raise TypeError(f"Class {kernel_cls} must inherit from BaseKernel")
+
         kernel_id = kernel_cls.get_kernel_id()
         device = kernel_cls.get_device()
 
@@ -72,20 +71,20 @@ class Registry:
         return kernel_cls
 
     @classmethod
-    def get(cls, kernel_id: str) -> Optional[type[BaseKernel]]:
-        r"""Retrieves a registered kernel implementation by its ID.
+    def get(cls, kernel_id: str) -> type[BaseKernel] | None:
+        """Retrieves a registered kernel implementation by its ID.
 
         Args:
             kernel_id (str): The ID of the kernel to retrieve.
 
         Returns:
-            Optional[type[BaseKernel]]: The kernel class if found, else ``None``.
+            type[BaseKernel] | None: The kernel class if found, else ``None``.
         """
         return cls._kernels.get(kernel_id)
 
     @classmethod
     def get_registered_kernels(cls) -> dict[str, type[BaseKernel]]:
-        r"""Returns a dictionary of all registered kernels.
+        """Returns a dictionary of all registered kernels.
 
         Returns:
             dict[str, type[BaseKernel]]: Dictionary mapping kernel IDs to kernel classes.

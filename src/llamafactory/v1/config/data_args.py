@@ -18,11 +18,11 @@ from dataclasses import dataclass, field
 
 @dataclass
 class DataArguments:
-    dataset: str | None = field(
+    train_dataset: str | None = field(
         default=None,
-        metadata={"help": "Path to the dataset."},
+        metadata={"help": "Path to the training dataset."},
     )
-    cutoff_len: int = field(
-        default=2048,
-        metadata={"help": "Cutoff length for the dataset."},
+    eval_dataset: str | None = field(
+        default=None,
+        metadata={"help": "Path to the evaluation dataset."},
     )
