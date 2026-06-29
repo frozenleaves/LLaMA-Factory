@@ -16,27 +16,42 @@
 
 This module is the orchestration + public API (``Renderer``). The mechanical pieces live in
 sibling modules:
-  - ``format``  -- v1<->HF message conversion
-  - ``escape``  -- special-token escaping (prompt-injection hardening)
+  - ``format``    -- v1<->HF message conversion, media extraction, placeholder-count guard
+  - ``escape``    -- special-token escaping (prompt-injection hardening)
+  - ``collation`` -- batch padding/truncation/MM alignment (consumed by the batch generators)
 
-Assistant supervision is located WITHOUT a per-model marker table: a training sample is rendered
-so that its last message is the supervised assistant turn, and that turn's token span is recovered
-by a single prompt/full difference -- encode the prompt (everything up to and including the
-assistant role header, via ``add_generation_prompt=True``) and the full sequence, then the tail of
-the full sequence that the prompt does not cover is exactly this turn. Multi-turn conversations are
-split into one sample per supervised turn (see ``process_samples``) so the supervised turn is always
-the last one; this keeps the diff on the only boundary that is prefix-stable across chat templates
-(appending the final assistant turn never restripts earlier turns), so models with reasoning-history
-stripping (e.g. Qwen3 ``<think>``) are handled correctly without hard-coding role markers.
+Assistant supervision is located WITHOUT a per-model marker table: a training sample is rendered so
+its last message is the supervised assistant turn, and that turn's token span is recovered by a
+single prompt/full difference. With media this diff runs in the processor-expanded token space --
+the supervised turn is text and all media lives in the history, which is identical in the prompt and
+full encodings, so the prompt is a token-prefix of the full sequence and the tail is exactly this
+turn. ``process_samples`` splits multi-turn conversations into one sample per supervised turn so the
+diff always sits on the prefix-stable last-turn boundary; this handles reasoning-history stripping
+(e.g. Qwen3 ``<think>``) correctly. The processor/tokenizer output (``input_ids``,
+``mm_token_type_ids``, pixel features) is used VERBATIM so multimodal arrays stay aligned.
+
+Note: ``position_ids`` are assigned by ``process_samples`` (1-based); multimodal (mrope) position
+ids are expected to be recomputed by the model/trainer.
 """
 
 import json
 
+import numpy as np
+import torch
+
 from ...utils.constants import IGNORE_INDEX
-from ...utils.helper import get_tokenizer
+from ...utils.helper import get_tokenizer, is_tokenizer
 from ...utils.types import Message, ModelInput, Processor, Sample
+from ..utils.collation import _MULTIMODAL_PASSTHROUGH_KEYS
 from .escape import _escape_special, _escape_special_in_messages, _special_token_strings
-from .format import _FALLBACK_CHATML_JINJA, _to_hf_messages
+from .format import (
+    _FALLBACK_CHATML_JINJA,
+    _check_placeholder_counts,
+    _count_media_in_messages,
+    _extract_media_from_messages,
+    _load_audios,
+    _to_hf_messages,
+)
 
 
 def _render_messages(
@@ -46,29 +61,31 @@ def _render_messages(
     is_generate: bool = False,
     enable_thinking: bool = False,
 ) -> ModelInput:
-    r"""Render messages using the model's own chat template.
+    r"""Render messages using the model's own chat template, locating supervision by a prompt/full diff.
 
     User-controlled literal text (``text``/``reasoning`` values, ``tool_call`` arg values, and
     ``tools`` definitions) is escaped first so any control token written literally by the user is
-    neutralized -- this is a no-op for normal data. The escaped conversation is rendered and
-    tokenized, and the token ids are used verbatim.
+    neutralized -- a no-op for normal data. The escaped conversation is rendered and run through the
+    processor (multimodal) or tokenizer (text), and the token ids are used verbatim.
 
-    For training (``is_generate=False``) the LAST message must be the supervised assistant turn:
-    its label span is located by a single prompt/full token diff -- no per-model role markers. For
-    generation (``is_generate=True``) the generation prompt is appended and nothing is supervised.
-
-    Note: ``position_ids`` are not produced here; ``process_samples`` assigns a 1-based range.
+    For training (``is_generate=False``) the LAST message must be the supervised assistant turn: its
+    label span is the tail of the full sequence that the prompt (everything up to and including the
+    assistant role header) does not cover -- no per-model role markers. For generation
+    (``is_generate=True``) the generation prompt is appended and nothing is supervised.
     """
     tokenizer = get_tokenizer(processor)
-    if not getattr(tokenizer, "chat_template", None):
-        tokenizer.chat_template = _FALLBACK_CHATML_JINJA
+    is_multimodal = not is_tokenizer(processor)
+
+    template_caller = processor if is_multimodal else tokenizer
+    if not getattr(template_caller, "chat_template", None):
+        template_caller.chat_template = _FALLBACK_CHATML_JINJA
 
     # 0. Neutralize special-token strings in user-controlled text (no-op for normal data).
     specials = _special_token_strings(tokenizer)
     special_ids = {tid for tid, t in tokenizer.added_tokens_decoder.items() if getattr(t, "special", False)}
     messages = _escape_special_in_messages(messages, specials, special_ids, tokenizer)
 
-    hf_messages = _to_hf_messages(messages)
+    hf_messages = _to_hf_messages(messages, is_multimodal=is_multimodal)
 
     tools_parsed = None
     if tools:
@@ -88,37 +105,73 @@ def _render_messages(
     if enable_thinking is not None:
         template_kwargs["enable_thinking"] = enable_thinking
 
-    def _encode(msgs: list[dict], add_generation_prompt: bool) -> list[int]:
-        text = tokenizer.apply_chat_template(
-            msgs, tokenize=False, add_generation_prompt=add_generation_prompt, tools=tools_parsed, **template_kwargs
+    def _encode(hf_msgs: list[dict], src_msgs: list[Message], add_generation_prompt: bool):
+        """Render + tokenize, expanding media via the processor. Returns (input_ids, mm_outputs)."""
+        text = template_caller.apply_chat_template(
+            hf_msgs, tokenize=False, add_generation_prompt=add_generation_prompt, tools=tools_parsed, **template_kwargs
         )
-        return tokenizer(text, add_special_tokens=False)["input_ids"]
+        if is_multimodal and _count_media_in_messages(src_msgs) != (0, 0, 0):
+            images, videos, audios = _extract_media_from_messages(src_msgs)
+            # Every placeholder must come from a media block (escaping broke any literal ones).
+            _check_placeholder_counts(processor, text, len(images), len(videos), len(audios))
+            proc_kwargs = {"return_tensors": "pt"}
+            if images:
+                proc_kwargs["images"] = images
+            if videos:
+                proc_kwargs["videos"] = videos
+            if audios:
+                # Audio processors want decoded waveforms at the model's sampling rate, not paths.
+                proc_kwargs["audio"] = _load_audios(audios, processor.feature_extractor.sampling_rate)
+            mm_outputs = processor(text=text, **proc_kwargs)
+            return mm_outputs["input_ids"][0].tolist(), mm_outputs
+        return tokenizer(text, add_special_tokens=False)["input_ids"], None
 
-    # 1. Full sequence, used verbatim.
-    input_ids = _encode(hf_messages, add_generation_prompt=is_generate)
+    # 1. Full sequence (used verbatim), plus its multimodal feature outputs.
+    input_ids, outputs = _encode(hf_messages, messages, add_generation_prompt=is_generate)
     n = len(input_ids)
+
+    def _attach_multimodal(result: ModelInput) -> None:
+        if outputs is None:
+            return
+        for key in _MULTIMODAL_PASSTHROUGH_KEYS:
+            if key in outputs:
+                result[key] = outputs[key]
+        mm_type_ids = outputs["mm_token_type_ids"][0].tolist() if "mm_token_type_ids" in outputs else None
+
+        # Audio processors (e.g. Qwen2-Audio) do not emit mm_token_type_ids. Synthesize one marking
+        # audio placeholder tokens as 3 so the downstream batching machinery (truncation alignment +
+        # FSDP dummy injection), which locates media by mm_token_type_ids, treats audio uniformly.
+        audio_token_id = getattr(processor, "audio_token_id", None)
+        if audio_token_id is not None and audio_token_id in input_ids:
+            if mm_type_ids is None:
+                mm_type_ids = [0] * len(input_ids)
+            mm_type_ids = [3 if tid == audio_token_id else t for t, tid in zip(mm_type_ids, input_ids)]
+
+        if mm_type_ids is not None:
+            result["mm_token_type_ids"] = mm_type_ids
 
     if is_generate:
         # Generation prompt only -- nothing is supervised.
-        return ModelInput(
+        result = ModelInput(
             input_ids=input_ids,
             attention_mask=[1] * n,
             labels=[IGNORE_INDEX] * n,
             loss_weights=[0.0] * n,
         )
+        _attach_multimodal(result)
+        return result
 
-    # 2. Locate the supervised (last) assistant turn by a prompt/full diff (no marker table).
+    # 2. Locate the supervised (last) assistant turn by a prompt/full diff (no marker table). The
+    # prompt is encoded with the same history media, so for an expanded (multimodal) stream it is
+    # still a token-prefix of the full sequence -- the supervised turn is text and adds no media.
     if not messages or messages[-1]["role"] != "assistant":
         raise ValueError(
             "training render expects the last message to be the supervised assistant turn; "
             "multi-turn conversations are split per turn in process_samples."
         )
 
-    prompt_ids = _encode(hf_messages[:-1], add_generation_prompt=True)
+    prompt_ids, _ = _encode(hf_messages[:-1], messages[:-1], add_generation_prompt=True)
     if input_ids[: len(prompt_ids)] != prompt_ids:
-        # The prompt must be a token-prefix of the full sequence for the diff to be valid. If a
-        # template re-renders earlier turns when the final turn is appended, fail loud rather than
-        # mislabel.
         raise ValueError(
             "prompt is not a token-prefix of the full sequence; the chat template is not "
             "prefix-stable for this turn, so diff-based labeling is unsafe."
@@ -132,12 +185,14 @@ def _render_messages(
         labels.append(tid if supervised else IGNORE_INDEX)
         loss_weights.append(weight)
 
-    return ModelInput(
+    result = ModelInput(
         input_ids=input_ids,
         attention_mask=[1] * n,
         labels=labels,
         loss_weights=loss_weights,
     )
+    _attach_multimodal(result)
+    return result
 
 
 class Renderer:
@@ -174,18 +229,79 @@ class Renderer:
             enable_thinking=enable_thinking,
         )
 
+    def get_dummy_media_fragment(self, modality: str) -> dict:
+        """Build (and cache) a minimal valid media fragment for ``modality`` ("image"|"video"|"audio").
+
+        Renders one tiny synthetic image/video/audio through the model's own processor and extracts
+        the token span it emits for that media (the ``vision_start … vision_end`` block for vision,
+        the ``audio_bos … audio_eos`` block for audio, delimiters included) together with its
+        feature tensors. The collator appends this zero-loss fragment to a micro batch that lacks
+        the modality so that every data-parallel rank invokes the vision/audio tower the same number
+        of times per step -- otherwise FSDP/DDP collectives over the (sharded) encoder blocks desync
+        and hang (NCCL timeout).
+
+        The fragment is self-consistent by construction: the placeholder-token count matches the
+        feature length, because both come from the same processor call.
+        """
+        if modality not in ("image", "video", "audio"):
+            raise ValueError(f"Unsupported dummy media modality: {modality!r} (expected image/video/audio).")
+        if is_tokenizer(self.processor):
+            raise RuntimeError("Cannot build a dummy media fragment for a text-only processor.")
+
+        if not hasattr(self, "_dummy_fragments"):
+            self._dummy_fragments: dict[str, dict] = {}
+        if modality in self._dummy_fragments:
+            return self._dummy_fragments[modality]
+
+        from PIL import Image as _PILImage
+
+        if modality == "image":
+            media_block = {"type": "image_url", "value": _PILImage.new("RGB", (64, 64))}
+            target, presence_key, feature_keys = 1, "pixel_values", ("pixel_values", "image_grid_thw")
+        elif modality == "video":
+            # A minimal clip: the temporal patch size is typically 2, so provide two frames.
+            media_block = {"type": "video_url", "value": np.zeros((2, 64, 64, 3), dtype=np.uint8)}
+            target, presence_key, feature_keys = 2, "pixel_values_videos", ("pixel_values_videos", "video_grid_thw")
+        else:
+            # A short synthetic waveform at the model's sampling rate; the feature extractor pads it.
+            sr = self.processor.feature_extractor.sampling_rate
+            media_block = {"type": "audio_url", "value": np.zeros(sr // 10, dtype=np.float32)}
+            target, presence_key, feature_keys = 3, "input_features", ("input_features", "feature_attention_mask")
+
+        messages: list[Message] = [
+            {"role": "user", "content": [media_block]},
+            {"role": "assistant", "content": [{"type": "text", "value": "ok"}]},
+        ]
+        rendered = self.render_messages(messages)
+
+        mm_type_ids = rendered.get("mm_token_type_ids")
+        if not mm_type_ids or target not in mm_type_ids or presence_key not in rendered:
+            raise RuntimeError(f"Processor did not emit {modality} placeholder tokens for the dummy sample.")
+
+        positions = [i for i, t in enumerate(mm_type_ids) if t == target]
+        # Include the surrounding start/end delimiters (vision_start/end or audio_bos/eos) so the
+        # fragment matches exactly what the template emits around real media.
+        lo = max(positions[0] - 1, 0)
+        hi = min(positions[-1] + 2, len(rendered["input_ids"]))
+
+        fragment: dict = {
+            "input_ids": list(rendered["input_ids"][lo:hi]),
+            "mm_token_type_ids": list(mm_type_ids[lo:hi]),
+        }
+        for key in feature_keys:
+            fragment[key] = rendered[key]
+        if modality == "video" and "second_per_grid_ts" in rendered:
+            fragment["second_per_grid_ts"] = rendered["second_per_grid_ts"]
+
+        self._dummy_fragments[modality] = fragment
+        return fragment
+
     def process_samples(self, samples: list[Sample]) -> list[ModelInput]:
         """Process samples to model input.
 
         Multi-turn SFT conversations are already prefix-split in the data layer (DataEngine), so each
         ``messages`` sample is rendered once -- the diff-based renderer supervises only its last
         assistant turn.
-
-        Args:
-            samples: The samples to process.
-
-        Returns:
-            List of processed model inputs.
         """
         model_inputs = []
         for sample in samples:
@@ -211,6 +327,20 @@ class Renderer:
                 model_input["position_ids"] = list(range(1, len(chosen_input["input_ids"]) + 1)) + list(
                     range(1, len(rejected_input["input_ids"]) + 1)
                 )
+
+                # Carry multimodal features. Chosen tokens precede rejected ones in the concatenated
+                # sequence, so concatenate their pixel features in the same order to keep the
+                # token<->pixel correspondence intact.
+                for key in _MULTIMODAL_PASSTHROUGH_KEYS:
+                    tensors = [inp[key] for inp in (chosen_input, rejected_input) if key in inp]
+                    if tensors:
+                        model_input[key] = torch.cat(tensors, dim=0)
+
+                if "mm_token_type_ids" in chosen_input or "mm_token_type_ids" in rejected_input:
+                    chosen_mm = chosen_input.get("mm_token_type_ids", [0] * len(chosen_input["input_ids"]))
+                    rejected_mm = rejected_input.get("mm_token_type_ids", [0] * len(rejected_input["input_ids"]))
+                    model_input["mm_token_type_ids"] = chosen_mm + rejected_mm
+
                 rendered.append(model_input)
             else:
                 raise ValueError("No valid messages or chosen_messages/rejected_messages found in sample.")

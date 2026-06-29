@@ -13,9 +13,10 @@
 # limitations under the License.
 
 import json
+import os
 
 import pytest
-from transformers import AutoConfig, AutoTokenizer
+from transformers import AutoConfig, AutoProcessor, AutoTokenizer
 
 from llamafactory.v1.config import DataArguments
 from llamafactory.v1.core.data_engine import DataEngine
@@ -306,6 +307,8 @@ def test_process_samples_renders_last_turn():
 
 def test_data_engine_prefix_cuts():
     """DataEngine prefix-expands multi-turn SFT: one cut per supervised assistant turn."""
+    from llamafactory.v1.core.data_engine import DataEngine
+
     multiturn = {
         "messages": [
             {"role": "user", "content": [{"type": "text", "value": "q1"}]},
@@ -393,6 +396,184 @@ def test_render_messages_loss_weight_zero():
     assert "untrained answer" not in decoded
     assert "trained answer" in decoded
 
+
+# ----------------------------- multimodal (local VL model, slow + env-gated) -----------------------------
+
+_VL_MODEL = os.environ.get("LMF_TEST_VL_MODEL")  # e.g. a local Qwen3-VL / Qwen3.5 dir; tests skip if unset
+
+
+@pytest.fixture(scope="module")
+def vl_renderer():
+    if not _VL_MODEL:
+        pytest.skip("set LMF_TEST_VL_MODEL to a local VL model dir to run multimodal rendering tests")
+    processor = AutoProcessor.from_pretrained(_VL_MODEL, trust_remote_code=True)
+    return processor, _make_renderer(_VL_MODEL, processor=processor, trust_remote_code=True)
+
+
+def _make_image(path: str):
+    from PIL import Image
+
+    Image.new("RGB", (64, 64), (255, 0, 0)).save(path)
+    return path
+
+
+@pytest.mark.slow
+def test_render_mm_single_image_matches_processor(vl_renderer, tmp_path):
+    processor, renderer = vl_renderer
+    img = _make_image(str(tmp_path / "a.png"))
+    messages = [
+        {"role": "user", "content": [{"type": "image_url", "value": img}, {"type": "text", "value": "Describe."}]},
+        {"role": "assistant", "content": [{"type": "text", "value": "A red square."}]},
+    ]
+    model_input = renderer.render_messages(messages)
+
+    # input_ids match the processor's own output on the clean render (no collision -> verbatim)
+    hf = [
+        {"role": "user", "content": [{"type": "image", "image": img}, {"type": "text", "text": "Describe."}]},
+        {"role": "assistant", "content": [{"type": "text", "text": "A red square."}]},
+    ]
+    clean = processor.apply_chat_template(hf, tokenize=False, add_generation_prompt=False)
+    gt = processor(text=clean, images=[img], return_tensors="pt")["input_ids"][0].tolist()
+    assert model_input["input_ids"] == gt
+
+    # H1: mm_token_type_ids is per-token aligned and image tokens are counted, not labeled
+    mm = model_input["mm_token_type_ids"]
+    assert len(mm) == len(model_input["input_ids"])
+    assert mm.count(1) == model_input["input_ids"].count(processor.image_token_id)
+    assert _count_loss_regions(model_input) == 1
+
+
+@pytest.mark.slow
+def test_render_mm_literal_placeholder_no_crash(vl_renderer, tmp_path):
+    processor, renderer = vl_renderer
+    img = _make_image(str(tmp_path / "b.png"))
+    lit = "<|vision_start|><|image_pad|><|vision_end|>"
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "value": "这张图"},
+                {"type": "image_url", "value": img},
+                {"type": "text", "value": f"，解释 `{lit}`"},
+            ],
+        },
+        {"role": "assistant", "content": [{"type": "text", "value": "占位符。"}]},
+    ]
+    # would crash the processor without escaping; here it must render cleanly
+    model_input = renderer.render_messages(messages)
+    assert _count_loss_regions(model_input) == 1
+    # exactly one real image expanded (literal placeholder neutralized, not counted)
+    assert model_input["input_ids"].count(processor.image_token_id) == model_input["mm_token_type_ids"].count(1)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    ("modality", "pixel_key", "grid_key", "target"),
+    [
+        ("image", "pixel_values", "image_grid_thw", 1),
+        ("video", "pixel_values_videos", "video_grid_thw", 2),
+    ],
+)
+def test_dummy_media_fragment_is_self_consistent(vl_renderer, modality, pixel_key, grid_key, target):
+    """The injected dummy must keep placeholder-token count == merged patch count."""
+    _, renderer = vl_renderer
+    frag = renderer.get_dummy_media_fragment(modality)
+
+    assert pixel_key in frag and grid_key in frag
+    assert len(frag["mm_token_type_ids"]) == len(frag["input_ids"])
+
+    n_pad = sum(1 for t in frag["mm_token_type_ids"] if t == target)
+    patches = int(frag[grid_key].prod().item())
+    assert n_pad > 0
+    # token <-> patch correspondence: patches must be an exact multiple of placeholder tokens
+    assert patches % n_pad == 0
+    merge_sq = patches // n_pad
+    assert frag[pixel_key].shape[0] == n_pad * merge_sq
+
+    # cached: repeated calls return the same object
+    assert renderer.get_dummy_media_fragment(modality) is frag
+
+
+# ----------------------------- audio (local Qwen2-Audio model, slow + env-gated) -----------------------------
+
+_AUDIO_MODEL = os.environ.get("LMF_TEST_AUDIO_MODEL")  # e.g. a local Qwen2-Audio dir; tests skip if unset
+
+
+@pytest.fixture(scope="module")
+def audio_renderer():
+    if not _AUDIO_MODEL:
+        pytest.skip("set LMF_TEST_AUDIO_MODEL to a local Qwen2-Audio model dir to run audio rendering tests")
+    processor = AutoProcessor.from_pretrained(_AUDIO_MODEL)
+    return processor, _make_renderer(_AUDIO_MODEL, processor=processor)
+
+
+@pytest.mark.slow
+def test_render_audio_emits_features_and_expands_tokens(audio_renderer):
+    import numpy as np
+
+    processor, renderer = audio_renderer
+    audio = np.zeros(16000, dtype=np.float32)  # 1s of silence at the model's sampling rate
+    messages = [
+        {
+            "role": "user",
+            "content": [{"type": "audio_url", "value": audio}, {"type": "text", "value": "What is this sound?"}],
+            "loss_weight": 0.0,
+        },
+        {"role": "assistant", "content": [{"type": "text", "value": "It is silence."}], "loss_weight": 1.0},
+    ]
+    model_input = renderer.render_messages(messages)
+
+    # audio feature tensors are carried through verbatim from the processor
+    assert "input_features" in model_input and "feature_attention_mask" in model_input
+
+    # the single <|AUDIO|> placeholder is expanded by the processor into many audio tokens
+    n_audio_tokens = model_input["input_ids"].count(processor.audio_token_id)
+    assert n_audio_tokens > 1
+
+    # exactly one assistant loss region; the audio span carries no loss
+    assert _count_loss_regions(model_input) == 1
+    assert all(
+        model_input["labels"][i] == IGNORE_INDEX
+        for i, t in enumerate(model_input["input_ids"])
+        if t == processor.audio_token_id
+    )
+
+
+@pytest.mark.slow
+def test_render_audio_synthesizes_mm_token_type_ids(audio_renderer):
+    """Qwen2-Audio emits no mm_token_type_ids; the renderer must synthesize one marking audio=3."""
+    import numpy as np
+
+    processor, renderer = audio_renderer
+    messages = [
+        {"role": "user", "content": [{"type": "audio_url", "value": np.zeros(16000, dtype=np.float32)}]},
+        {"role": "assistant", "content": [{"type": "text", "value": "ok"}]},
+    ]
+    model_input = renderer.render_messages(messages)
+    mm = model_input["mm_token_type_ids"]
+    ids = model_input["input_ids"]
+    assert len(mm) == len(ids)
+    # exactly the audio_token_id positions are marked 3, everything else 0
+    assert all((m == 3) == (t == processor.audio_token_id) for m, t in zip(mm, ids))
+    assert mm.count(3) == ids.count(processor.audio_token_id) > 1
+
+
+@pytest.mark.slow
+def test_dummy_audio_fragment_is_self_consistent(audio_renderer):
+    """The injected audio dummy must keep placeholder-token count and one feature row consistent."""
+    _, renderer = audio_renderer
+    frag = renderer.get_dummy_media_fragment("audio")
+
+    assert "input_features" in frag and "feature_attention_mask" in frag
+    assert len(frag["mm_token_type_ids"]) == len(frag["input_ids"])
+
+    n_tok = sum(1 for t in frag["mm_token_type_ids"] if t == 3)
+    assert n_tok > 0
+    assert frag["input_features"].shape[0] == 1  # one synthetic audio
+    assert frag["feature_attention_mask"].shape[0] == 1
+
+    # cached: repeated calls return the same object
+    assert renderer.get_dummy_media_fragment("audio") is frag
 
 if __name__ == "__main__":
     """
