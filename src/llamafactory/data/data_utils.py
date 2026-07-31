@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import json
-from enum import StrEnum, unique
+from enum import Enum, unique
 from typing import TYPE_CHECKING, Any, Optional, TypedDict, Union
 
 import fsspec
@@ -32,6 +32,10 @@ logger = logging.get_logger(__name__)
 
 
 SLOTS = list[Union[str, set[str], dict[str, str]]]
+
+
+class StrEnum(str, Enum):
+    pass
 
 
 @unique
