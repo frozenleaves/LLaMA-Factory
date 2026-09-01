@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import importlib.util
 from typing import TYPE_CHECKING
 
 from ...extras import logging
@@ -83,13 +84,21 @@ def configure_attn_implementation(config: "PretrainedConfig", model_args: "Model
 
         requested_attn_implementation = "flash_attention_2"
     elif model_args.flash_attn == AttentionFunction.FA3:
-        from transformers.utils import is_flash_attn_3_available
+        try:
+            from transformers.utils import is_flash_attn_3_available
+            from transformers.utils.import_utils import is_torch_supa_available
 
-        if not is_flash_attn_3_available():
-            logger.warning_rank0("FlashAttention-3 is not installed.")
+            # SUPA provides the FA3-compatible API through flashattn-train rather than
+            # the CUDA-only flash_attn_interface package.
+            is_supa_fa3_available = is_torch_supa_available() and importlib.util.find_spec("flashattn_train") is not None
+
+            if not (is_flash_attn_3_available() or is_supa_fa3_available):
+                logger.warning_rank0("FlashAttention-3 is not installed.")
+                return
+
+            requested_attn_implementation = "fa3" if is_supa_fa3_available else "flash_attention_3"
+        except:
             return
-
-        requested_attn_implementation = "flash_attention_3"
     else:
         raise NotImplementedError(f"Unknown attention type: {model_args.flash_attn}")
 

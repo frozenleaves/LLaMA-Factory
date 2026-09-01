@@ -13,6 +13,9 @@
 # limitations under the License.
 
 
+from torch.nn.attention import SDPBackend, sdpa_kernel
+
+
 def main():
     from .extras.misc import is_env_enabled
 
@@ -21,7 +24,9 @@ def main():
     else:
         from . import launcher
 
-    launcher.launch()
+    sdpa_backend = SDPBackend.CUDNN_ATTENTION
+    with sdpa_kernel(sdpa_backend):
+        launcher.launch()
 
 
 if __name__ == "__main__":
